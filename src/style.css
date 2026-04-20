@@ -1,0 +1,10 @@
+/* 与 dijiaosss 工作台布局一致：全屏容器，避免默认 Vite 模板限制 #app 宽度 */
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+#app {
+  height: 100%;
+}
