@@ -212,7 +212,7 @@
     <div class="body-part-content">
       <div class="part-table-header">
         <div class="part-table-title">
-          <span>专利电子来文</span>
+          <span>商标电子来文</span>
         </div>
         <div class="part-table-actions">
           <el-button type="primary" @click="handleRestoreNotImported">
@@ -289,6 +289,43 @@
         @current-change="handleCurrentChange"
       />
     </div>
+
+    <el-dialog
+      v-model="receiptDialogVisible"
+      title="上传回执"
+      width="520px"
+      destroy-on-close
+      @closed="resetReceiptDialog"
+    >
+      <el-form label-width="100px">
+        <el-form-item label="ZIP 包" required>
+          <input
+            ref="receiptZipInputRef"
+            type="file"
+            accept=".zip,application/zip"
+            class="receipt-file-input"
+            @change="onReceiptZipChange"
+          />
+          <span v-if="receiptZip?.name" class="receipt-file-name">{{ receiptZip.name }}</span>
+        </el-form-item>
+        <el-form-item label="Excel 表" required>
+          <input
+            ref="receiptExcelInputRef"
+            type="file"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            class="receipt-file-input"
+            @change="onReceiptExcelChange"
+          />
+          <span v-if="receiptExcel?.name" class="receipt-file-name">{{ receiptExcel.name }}</span>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="receiptDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="receiptUploading" @click="submitReceiptUpload">
+          上传
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -309,6 +346,7 @@ const route = useRoute()
 
 const loading = ref(false)
 const ids = ref([])
+const dataTable = ref(null)
 const total = ref(0)
 const tableData = ref([])
 
@@ -457,9 +495,38 @@ const handleRestoreNotImported = () => {
   ElMessage.success(`已恢复未导入来文，共 ${ids.value.length} 条`)
 }
 
-const handleMoveToNoProcess = () => {
+const collectMoveNoNeedPayload = () => {
+  const rows = dataTable.value?.getSelectionRows?.() ?? []
+  const ids = rows
+    .map((r) => r.id)
+    .filter((id) => id != null && id !== '')
+  const projectNos = rows
+    .map((r) => r.projectNo ?? r.projectNumber)
+    .map((v) => (v != null && v !== '' ? String(v).trim() : ''))
+    .filter(Boolean)
+  return { ids, projectNos }
+}
+
+const handleMoveToNoProcess = async () => {
   if (!ensureSelection()) return
-  ElMessage.success(`已转入无需处理，共 ${ids.value.length} 条`)
+  const { ids: selectedIds, projectNos } = collectMoveNoNeedPayload()
+  if (selectedIds.length === 0) {
+    ElMessage.warning('所选记录缺少有效 id，无法转入无需处理')
+    return
+  }
+  loading.value = true
+  try {
+    const res = await TrademarkIncomingAPI.moveNoNeed({
+      ids: selectedIds,
+      project_no: projectNos,
+    })
+    ElMessage.success(res?.message || `已转入无需处理，共 ${selectedIds.length} 条`)
+    getList()
+  } catch (error) {
+    ElMessage.error(error?.message || '转入无需处理失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleImportToSystem = () => {
@@ -480,13 +547,122 @@ const handleMatchProject = async () => {
   }
 }
 
-const handleExportTable = () => {
-  ElMessage.info(`正在导出表格，当前共 ${tableData.value.length} 条数据`)
+function parseFilenameFromContentDisposition(disposition) {
+  if (!disposition || typeof disposition !== 'string') return ''
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(disposition)
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1].trim())
+    } catch {
+      return star[1].trim()
+    }
+  }
+  const quoted = /filename="([^"]+)"/i.exec(disposition)
+  if (quoted?.[1]) return quoted[1]
+  const plain = /filename=([^;\s]+)/i.exec(disposition)
+  return plain?.[1] ? plain[1].replace(/^["']|["']$/g, '') : ''
+}
+
+const handleExportTable = async () => {
+  if (!ensureSelection()) return
+  loading.value = true
+  try {
+    const response = await TrademarkIncomingAPI.exportList(ids.value)
+    const blob = response.data
+    const ctype = (response.headers['content-type'] || '').toLowerCase()
+    if (ctype.includes('application/json')) {
+      const text = await blob.text()
+      let msg = '导出失败'
+      try {
+        const j = JSON.parse(text)
+        msg = j.message || j.msg || msg
+      } catch {
+        /* ignore */
+      }
+      ElMessage.error(msg)
+      return
+    }
+    let filename = parseFilenameFromContentDisposition(
+      response.headers['content-disposition'] || response.headers['Content-Disposition']
+    )
+    if (!filename) filename = `商标电子来文_${Date.now()}.xlsx`
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.rel = 'noopener'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    ElMessage.success('导出成功')
+  } catch (error) {
+    const data = error?.response?.data
+    if (data instanceof Blob) {
+      try {
+        const text = await data.text()
+        const j = JSON.parse(text)
+        ElMessage.error(j.message || j.msg || '导出失败')
+      } catch {
+        ElMessage.error(error?.message || '导出失败')
+      }
+    } else {
+      ElMessage.error(error?.message || '导出失败')
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+const receiptDialogVisible = ref(false)
+const receiptZip = ref(null)
+const receiptExcel = ref(null)
+const receiptZipInputRef = ref(null)
+const receiptExcelInputRef = ref(null)
+const receiptUploading = ref(false)
+
+const onReceiptZipChange = (e) => {
+  const f = e.target?.files?.[0]
+  receiptZip.value = f || null
+}
+
+const onReceiptExcelChange = (e) => {
+  const f = e.target?.files?.[0]
+  receiptExcel.value = f || null
+}
+
+const resetReceiptDialog = () => {
+  receiptZip.value = null
+  receiptExcel.value = null
+  if (receiptZipInputRef.value) receiptZipInputRef.value.value = ''
+  if (receiptExcelInputRef.value) receiptExcelInputRef.value.value = ''
 }
 
 const handleUploadReceipt = () => {
-  if (!ensureSelection()) return
-  ElMessage.success(`已上传回执，共 ${ids.value.length} 条`)
+  receiptDialogVisible.value = true
+}
+
+const submitReceiptUpload = async () => {
+  const zip = receiptZip.value
+  const excel = receiptExcel.value
+  if (!zip || !excel) {
+    ElMessage.warning('请同时选择 ZIP 压缩包与 Excel 文件')
+    return
+  }
+  receiptUploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', zip, zip.name)
+    formData.append('excel', excel, excel.name)
+    const res = await TrademarkIncomingAPI.uploadReceipt(formData)
+    ElMessage.success(res?.message || '上传成功')
+    receiptDialogVisible.value = false
+    getList()
+  } catch (error) {
+    ElMessage.error(error?.message || '上传失败')
+  } finally {
+    receiptUploading.value = false
+  }
 }
 
 const handleUploadCertificate = () => {
@@ -598,5 +774,17 @@ onMounted(() => {
 .filter-item :deep(.el-select .el-input__wrapper) {
   height: auto;
   line-height: normal;
+}
+
+.receipt-file-input {
+  display: block;
+  max-width: 100%;
+}
+.receipt-file-name {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #606266;
+  word-break: break-all;
 }
 </style>
