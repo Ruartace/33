@@ -6,10 +6,21 @@
         <el-form :model="queryParams" ref="queryForm" label-width="120px">
           <el-row :gutter="20">
             <el-col :span="8">
-              <el-form-item label="我方文号" prop="ourDocumentNumber">
+              <el-form-item label="项目编号" prop="projectNumber">
                 <el-input
-                  v-model="queryParams.ourDocumentNumber"
-                  placeholder="请输入我方文号"
+                  v-model="queryParams.projectNumber"
+                  placeholder="请输入项目编号"
+                  clearable
+                  class="filter-item"
+                  @keyup.enter="handleQuery"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="申请号" prop="applicationNumber">
+                <el-input
+                  v-model="queryParams.applicationNumber"
+                  placeholder="请输入申请号"
                   clearable
                   class="filter-item"
                   @keyup.enter="handleQuery"
@@ -28,25 +39,20 @@
               </el-form-item>
             </el-col>
             <el-col :span="8">
-              <el-form-item label="客户文号" prop="customerDocumentNumber">
-                <el-input
-                  v-model="queryParams.customerDocumentNumber"
-                  placeholder="请输入客户文号"
+              <el-form-item label="处理状态" prop="status">
+                <el-select
+                  v-model="queryParams.status"
+                  placeholder="请选择处理状态"
                   clearable
                   class="filter-item"
-                  @keyup.enter="handleQuery"
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="项目名称" prop="projectName">
-                <el-input
-                  v-model="queryParams.projectName"
-                  placeholder="请输入项目名称"
-                  clearable
-                  class="filter-item"
-                  @keyup.enter="handleQuery"
-                />
+                >
+                  <el-option
+                    v-for="item in statusOptions"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
             <el-col :span="8">
@@ -67,10 +73,22 @@
               </el-form-item>
             </el-col>
             <el-col :span="8">
-              <el-form-item label="通知名称" prop="notificationName">
+              <el-form-item label="收文日">
+                <el-date-picker
+                  v-model="queryParams.receiptTime"
+                  type="daterange"
+                  value-format="YYYY-MM-DD"
+                  range-separator="至"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item label="项目名称" prop="projectName">
                 <el-input
-                  v-model="queryParams.notificationName"
-                  placeholder="请输入通知名称"
+                  v-model="queryParams.projectName"
+                  placeholder="请输入项目名称"
                   clearable
                   class="filter-item"
                   @keyup.enter="handleQuery"
@@ -117,22 +135,10 @@
               </el-form-item>
             </el-col>
             <el-col :span="8">
-              <el-form-item label="收文日">
-                <el-date-picker
-                  v-model="queryParams.receiptTime"
-                  type="daterange"
-                  value-format="YYYY-MM-DD"
-                  range-separator="至"
-                  start-placeholder="开始日期"
-                  end-placeholder="结束日期"
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="申请号" prop="applicationNumber">
+              <el-form-item label="通知名称" prop="notificationName">
                 <el-input
-                  v-model="queryParams.applicationNumber"
-                  placeholder="请输入申请号"
+                  v-model="queryParams.notificationName"
+                  placeholder="请输入通知名称"
                   clearable
                   class="filter-item"
                   @keyup.enter="handleQuery"
@@ -140,20 +146,15 @@
               </el-form-item>
             </el-col>
             <el-col :span="8">
-              <el-form-item label="处理状态" prop="status">
-                <el-select
-                  v-model="queryParams.status"
-                  placeholder="请选择处理状态"
-                  clearable
-                  class="filter-item"
-                >
-                  <el-option
-                    v-for="item in statusOptions"
-                    :key="item.value"
-                    :label="item.label"
-                    :value="item.value"
-                  />
-                </el-select>
+              <el-form-item label="上传日期">
+                <el-date-picker
+                  v-model="queryParams.uploadTime"
+                  type="daterange"
+                  value-format="YYYY-MM-DD"
+                  range-separator="至"
+                  start-placeholder="开始日期"
+                  end-placeholder="结束日期"
+                />
               </el-form-item>
             </el-col>
             <el-col :span="8">
@@ -175,25 +176,19 @@
             </el-col>
             <el-col :span="8">
               <el-form-item label="分析人员" prop="analyst">
-                <el-input
+                <el-select
                   v-model="queryParams.analyst"
-                  placeholder="请输入分析人员"
+                  placeholder="请选择分析人员"
                   clearable
                   class="filter-item"
-                  @keyup.enter="handleQuery"
-                />
-              </el-form-item>
-            </el-col>
-            <el-col :span="8">
-              <el-form-item label="上传日期">
-                <el-date-picker
-                  v-model="queryParams.uploadTime"
-                  type="daterange"
-                  value-format="YYYY-MM-DD"
-                  range-separator="至"
-                  start-placeholder="开始日期"
-                  end-placeholder="结束日期"
-                />
+                >
+                  <el-option
+                    v-for="item in analystOptions"
+                    :key="item.value"
+                    :label="item.label"
+                    :value="item.value"
+                  />
+                </el-select>
               </el-form-item>
             </el-col>
           </el-row>
@@ -265,21 +260,16 @@
           </template>
         </el-table-column>
         <el-table-column label="项目编号" prop="projectNumber" width="150" align="center" />
-        <el-table-column label="注册号" prop="businessType" width="120" align="center" />
+        <el-table-column label="注册号" prop="registrationNumber" width="120" align="center" />
+        <el-table-column label="类别" prop="category" width="100" align="center" />
         <el-table-column label="项目名称" prop="projectName" min-width="200" align="center" />
-        <el-table-column label="来文类型" prop="notificationType" width="120" align="center" />
-        <el-table-column label="收文日" prop="officialReleaseDate" width="120" align="center" />
-        <el-table-column label="通知书编码" prop="notificationNumber" width="100" align="center" />
+        <el-table-column label="文件类型" prop="fileType" width="120" align="center" />
+        <el-table-column label="收文日" prop="receiptDate" width="120" align="center" />
+        <el-table-column label="申请号" prop="applicationNumber" width="130" align="center" />
         <el-table-column label="内部代码" prop="internalCode" width="100" align="center" />
-        <el-table-column
-          label="发文序列号"
-          prop="notificationSerialNumber"
-          width="130"
-          align="center"
-        />
         <el-table-column label="通知名称" prop="notificationName" width="120" align="center" />
-        <el-table-column label="申请类型" prop="applicationType" width="120" align="center" />
-        <el-table-column label="机构账号" prop="organizationAccount" width="120" align="center" />
+        <el-table-column label="业务类型" prop="businessType" width="120" align="center" />
+        <el-table-column label="机构" prop="organization" width="120" align="center" />
         <el-table-column label="客户名称" prop="customerName" width="120" align="center" />
         <el-table-column label="技术主导" prop="technicalLead" width="120" align="center" />
         <el-table-column label="状态" prop="status" width="120" align="center" />
@@ -308,7 +298,7 @@ import {
   Download as DownloadIcon,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { TrademarkIncomingPagedata } from '@/layouts/hshmoni'
+import { TrademarkIncomingAPI } from '@/api/trademarkincoming'
 
 defineOptions({ name: 'TrademarkIncomingPage' })
 
@@ -322,19 +312,20 @@ const tableData = ref([])
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
-  ourDocumentNumber: '',
+  projectNumber: '',
+  applicationNumber: '',
   registrationNumber: '',
-  customerDocumentNumber: '',
+  status: '',
+  documentType: '',
+  receiptTime: '',
   projectName: '',
-  notificationName: '',
   customerName: '',
   technicalLead: '',
-  status: '',
-  applicationNumber: '',
-  analyst: '',
-  documentType: '',
   applicationType: '',
+  notificationName: '',
+  uploadTime: '',
   organizationAccount: '',
+  analyst: '',
 })
 
 const documentTypeOptions = [
@@ -363,6 +354,12 @@ const organizationAccountOptions = [
   { label: 'TR-ORG-03', value: 'TR-ORG-03' },
 ]
 
+const analystOptions = [
+  { label: '张三', value: '张三' },
+  { label: '李四', value: '李四' },
+  { label: '王五', value: '王五' },
+]
+
 const ensureSelection = () => {
   if (!ids.value || ids.value.length === 0) {
     ElMessage.warning('请先在表格中勾选要操作的来文')
@@ -371,40 +368,42 @@ const ensureSelection = () => {
   return true
 }
 
-const getList = () => {
+const getList = async () => {
   loading.value = true
-  setTimeout(() => {
-    let list = TrademarkIncomingPagedata.map((item, index) => ({
-      id: item.id != null ? item.id : index + 1,
-      projectNumber: item.projectNumber,
-      businessType: item.businessType,
-      projectName: item.projectName,
-      notificationType: item.notificationType,
-      officialReleaseDate: item.officialReleaseDate,
-      notificationNumber: item.notificationNumber,
-      internalCode: item.internalCode,
-      notificationSerialNumber: item.notificationSerialNumber,
-      notificationName: item.notificationName,
-      applicationType: item.applicationType,
-      optimisticApprovalCase: item.optimisticApprovalCase,
-      preapprovalCase: item.preapprovalCase,
-      organizationAccount: item.organizationAccount,
+  try {
+    const params = {
+      pageNum: queryParams.pageNum,
+      pageSize: queryParams.pageSize,
+      projectNo: queryParams.projectNumber,
+      applicationNo: queryParams.applicationNumber,
+      registrationNo: queryParams.registrationNumber,
+      status: queryParams.status,
+      sourceType: queryParams.documentType,
+      caseName: queryParams.projectName,
+      customerName: queryParams.customerName,
+    }
+    
+    const res = await TrademarkIncomingAPI.getList(params)
+    tableData.value = (res.data || []).map((item) => ({
+      id: item.id,
+      projectNumber: item.projectNo,
+      applicationNumber: item.applicationNo,
+      registrationNumber: item.registrationNo,
+      projectName: item.caseName,
+      internalCode: item.caseCode,
       customerName: item.customerName,
-      technicalLead: item.technicalLead,
+      fileType: item.sourceType,
       status: item.status,
+      organization: item.agencyCode,
+      caseId: item.caseId,
     }))
-
-    if (queryParams.PriorityReview) {
-      list = list.filter((row) => row.status === '优审案')
-    }
-    if (queryParams.PreliminaryReview) {
-      list = list.filter((row) => row.status === '预审案')
-    }
-
-    tableData.value = list
-    total.value = tableData.value.length
+    total.value = res.data?.length || 0
+  } catch (error) {
+    console.error('获取数据失败:', error)
+    ElMessage.error('获取数据失败')
+  } finally {
     loading.value = false
-  }, 300)
+  }
 }
 
 const handleQuery = () => {
@@ -419,12 +418,20 @@ const handleSearch = () => {
 const handleReset = () => {
   queryParams.pageNum = 1
   queryParams.pageSize = 10
-  queryParams.ourDocumentNumber = ''
+  queryParams.projectNumber = ''
+  queryParams.applicationNumber = ''
+  queryParams.registrationNumber = ''
+  queryParams.status = ''
+  queryParams.documentType = ''
+  queryParams.receiptTime = ''
   queryParams.projectName = ''
   queryParams.customerName = ''
-  queryParams.projectBusinessPerson = ''
-  queryParams.PriorityReview = false
-  queryParams.PreliminaryReview = false
+  queryParams.technicalLead = ''
+  queryParams.applicationType = ''
+  queryParams.notificationName = ''
+  queryParams.uploadTime = ''
+  queryParams.organizationAccount = ''
+  queryParams.analyst = ''
   handleSearch()
 }
 
@@ -457,9 +464,17 @@ const handleImportToSystem = () => {
   ElMessage.success(`已导入系统，共 ${ids.value.length} 条`)
 }
 
-const handleMatchProject = () => {
-  if (!ensureSelection()) return
-  ElMessage.success(`已匹配项目，共 ${ids.value.length} 条`)
+const handleMatchProject = async () => {
+  loading.value = true
+  try {
+    const res = await TrademarkIncomingAPI.oneClickMatch()
+    ElMessage.success(res.message || `匹配完成，成功: ${res.successCount}，失败: ${res.failCount}`)
+    getList()
+  } catch (error) {
+    ElMessage.error(error.message || '匹配失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleExportTable = () => {
