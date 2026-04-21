@@ -490,9 +490,18 @@ const handleSelectionChange = (selection) => {
   ids.value = selection.map((item) => item.id)
 }
 
-const handleRestoreNotImported = () => {
+const handleRestoreNotImported = async () => {
   if (!ensureSelection()) return
-  ElMessage.success(`已恢复未导入来文，共 ${ids.value.length} 条`)
+  loading.value = true
+  try {
+    const res = await TrademarkIncomingAPI.restoreProcesses()
+    ElMessage.success(res?.message || `已恢复未导入来文，共 ${ids.value.length} 条`)
+    getList()
+  } catch (error) {
+    ElMessage.error(error?.message || '恢复未导入失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const collectMoveNoNeedPayload = () => {
@@ -529,9 +538,18 @@ const handleMoveToNoProcess = async () => {
   }
 }
 
-const handleImportToSystem = () => {
+const handleImportToSystem = async () => {
   if (!ensureSelection()) return
-  ElMessage.success(`已导入系统，共 ${ids.value.length} 条`)
+  loading.value = true
+  try {
+    const res = await TrademarkIncomingAPI.importProcesses()
+    ElMessage.success(res?.message || `已导入系统，共 ${ids.value.length} 条`)
+    getList()
+  } catch (error) {
+    ElMessage.error(error?.message || '导入系统失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleMatchProject = async () => {

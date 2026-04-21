@@ -42,4 +42,18 @@ export const TrademarkIncomingAPI = {
       data,
     })
   },
+  /** POST /api/trademark/import-processes — 导入系统 */
+  importProcesses() {
+    return request({
+      url: '/trademark/import-processes',
+      method: 'post',
+    })
+  },
+  /** POST /api/trademark/restore-processes — 恢复未导入 */
+  restoreProcesses() {
+    return request({
+      url: '/trademark/restore-processes',
+      method: 'post',
+    })
+  },
 }
