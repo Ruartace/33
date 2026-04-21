@@ -122,6 +122,8 @@ const route = useRoute()
   overflow-y: auto;
   height: calc(97vh - 60px);
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 :deep(.el-menu) {

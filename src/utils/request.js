@@ -11,6 +11,9 @@ const request = axios.create({
 
 request.interceptors.request.use(
   (config) => {
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
     return config
   },
   (error) => {

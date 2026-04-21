@@ -15,4 +15,11 @@ export const PatentIncomingAPI = {
       params: { ids },
     })
   },
+  parseZip(data) {
+    return request({
+      url: '/patent-certificate/parse-zip',
+      method: 'post',
+      data,
+    })
+  },
 }

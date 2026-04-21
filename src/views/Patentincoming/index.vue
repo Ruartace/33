@@ -176,92 +176,109 @@
 
     <!-- 内容区域 -->
     <div class="body-part-content">
-      <div class="part-table-header">
-        <div class="part-table-title">
-          <span>专利电子来文</span>
+      <div class="body-part-table-wrap">
+        <div class="part-table-header">
+          <div class="part-table-title">
+            <span>专利电子来文</span>
+          </div>
+          <div class="part-table-actions">
+            <el-button type="primary" @click="handleRestoreNotImported">恢复未导入</el-button>
+            <el-button type="primary" @click="handleMoveToNoProcess">转入无需处理</el-button>
+            <el-button type="primary" @click="handleImportToSystem">导入系统</el-button>
+            <el-button type="primary" @click="handleMatchProject">匹配项目</el-button>
+            <el-button type="primary" @click="handleExportTable">
+              <el-icon><DownloadIcon /></el-icon>导出表格
+            </el-button>
+            <el-button type="primary" @click="handleUploadReceipt">
+              <el-icon><DownloadIcon /></el-icon>上传回执
+            </el-button>
+            <el-button type="primary" @click="handleUploadCertificate">
+              <el-icon><DownloadIcon /></el-icon>上传证书
+            </el-button>
+            <el-button type="primary" @click="handleUploadNotification">
+              <el-icon><DownloadIcon /></el-icon>上传通知
+            </el-button>
+          </div>
         </div>
-        <div class="part-table-actions">
-          <el-button type="primary" @click="handleRestoreNotImported">
-            恢复未导入
-          </el-button>
-          <el-button type="primary" @click="handleMoveToNoProcess">
-            转入无需处理
-          </el-button>
-          <el-button type="primary" @click="handleImportToSystem">
-            导入系统
-          </el-button>
-          <el-button type="primary" @click="handleMatchProject">
-            匹配项目
-          </el-button>
-          <el-button type="primary" @click="handleExportTable">
-            <el-icon><DownloadIcon /></el-icon>
-            导出表格
-          </el-button>
-          <el-button type="primary" @click="handleUploadReceipt">
-            <el-icon><DownloadIcon /></el-icon>
-            上传回执
-          </el-button>
-          <el-button type="primary" @click="handleUploadCertificate">
-            <el-icon><DownloadIcon /></el-icon>
-            上传证书
-          </el-button>
-          <el-button type="primary" @click="handleUploadNotification">
-            <el-icon><DownloadIcon /></el-icon>
-            上传通知
-          </el-button>
-        </div>
-      </div>
 
-      <!-- 数据表格 -->
-      <el-table
-        ref="dataTable"
-        v-loading="loading"
-        :data="tableData"
-        border
-        row-key="id"
-        @selection-change="handleSelectionChange"
-        style="width: 100%"
-      >
-        <el-table-column type="selection" width="80" align="center" />
-        <el-table-column label="序号" align="center" width="60">
-          <template #default="scope">
-            {{ scope.$index + 1 }}
-          </template>
-        </el-table-column>
-        <el-table-column label="项目编号" prop="projectNumber" width="150" align="center" />
-        <el-table-column label="申请号" prop="applicationNo" width="150" align="center" />
-        <el-table-column label="项目名称" prop="projectName" min-width="200" align="center" />
-        <el-table-column label="来文类型" prop="sourceType" width="120" align="center" />
-        <el-table-column label="官方发文日" prop="officialDocumentDate" width="120" align="center" />
-        <el-table-column label="通知书编码" prop="notificationNumber" width="100" align="center" />
-        <el-table-column label="内部代码" prop="internalCode" width="100" align="center" />
-        <el-table-column
-          label="发文序列号"
-          prop="documentSequenceNumber"
-          width="130"
-          align="center"
+        <!-- 数据表格 -->
+        <el-table
+          ref="dataTable"
+          v-loading="loading"
+          :data="tableData"
+          border
+          row-key="id"
+          @selection-change="handleSelectionChange"
+          class="table-fill-height"
+        >
+          <el-table-column type="selection" width="80" align="center" />
+          <el-table-column label="序号" align="center" width="60" fixed="left">
+            <template #default="scope">
+              {{ scope.$index + 1 }}
+            </template>
+          </el-table-column>
+          <el-table-column label="项目编号" prop="projectNumber" width="150" align="center" />
+          <el-table-column label="申请号" prop="applicationNo" width="150" align="center" />
+          <el-table-column label="项目名称" prop="projectName" min-width="200" align="center" />
+          <el-table-column label="来文类型" prop="sourceType" width="120" align="center" />
+          <el-table-column label="官方发文日" prop="officialDocumentDate" width="120" align="center" />
+          <el-table-column label="通知书编码" prop="notificationNumber" width="100" align="center" />
+          <el-table-column label="内部代码" prop="internalCode" width="100" align="center" />
+          <el-table-column
+            label="发文序列号"
+            prop="documentSequenceNumber"
+            width="130"
+            align="center"
+          />
+          <el-table-column label="通知名称" prop="notificationName" width="120" align="center" />
+          <el-table-column label="申请类型" prop="applicationType" width="120" align="center" />
+          <el-table-column label="优审案" prop="priorityExamination" width="140" align="center" />
+          <el-table-column label="预审案" prop="preliminaryCase" width="100" align="center" />
+          <el-table-column label="机构账号" prop="institutionNumber" width="120" align="center" />
+          <el-table-column label="客户名称" prop="customerName" width="120" align="center" />
+          <el-table-column label="状态" prop="status" width="120" align="center" />
+        </el-table>
+        <!-- 分页 -->
+        <el-pagination
+          v-show="total > 0"
+          :total="total"
+          v-model:current-page="queryParams.pageNum"
+          v-model:page-size="queryParams.pageSize"
+          :page-sizes="[5, 10, 15, 20]"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
         />
-        <el-table-column label="通知名称" prop="notificationName" width="120" align="center" />
-        <el-table-column label="申请类型" prop="applicationType" width="120" align="center" />
-        <el-table-column label="优审案" prop="priorityExamination" width="140" align="center" />
-        <el-table-column label="预审案" prop="preliminaryCase" width="100" align="center" />
-        <el-table-column label="机构账号" prop="institutionNumber" width="120" align="center" />
-        <el-table-column label="客户名称" prop="customerName" width="120" align="center" />
-        <el-table-column label="状态" prop="status" width="120" align="center" />
-      </el-table>
-      <!-- 分页 -->
-      <el-pagination
-        v-show="total > 0"
-        :total="total"
-        v-model:current-page="queryParams.pageNum"
-        v-model:page-size="queryParams.pageSize"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        @size-change="handleSizeChange"
-        @current-change="handleCurrentChange"
-      />
+      </div>
     </div>
-  </div>
+
+    <!-- 上传通知弹窗 -->
+    <el-dialog v-model="uploadDialogVisible" title="上传通知" width="500px" @close="handleDialogClose">
+        <el-form :model="uploadForm" label-width="100px">
+          <el-form-item label="上传文件">
+            <el-upload
+              ref="uploadRef"
+              :auto-upload="false"
+              :limit="1"
+              :on-change="handleFileChange"
+              :on-remove="handleFileRemove"
+              accept=".zip,.rar,.7z"
+              drag
+            >
+              <el-icon><UploadFilled /></el-icon>
+              <span>将文件拖到此处，或<em>点击上传</em></span>
+              <template #tip>
+                <div class="el-upload__tip">支持 .zip/.rar/.7z 格式文件</div>
+              </template>
+            </el-upload>
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="uploadDialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="uploadLoading" @click="handleConfirmUpload">确认上传</el-button>
+        </template>
+      </el-dialog>
+    </div>
 </template>
 
 <script setup>
@@ -271,6 +288,7 @@ import {
   Search as SearchIcon,
   Refresh as RefreshIcon,
   Download as DownloadIcon,
+  UploadFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { PatentIncomingAPI } from '@/api/patentincoming'
@@ -283,6 +301,12 @@ const loading = ref(false)
 const ids = ref([])
 const total = ref(0)
 const tableData = ref([])
+const uploadDialogVisible = ref(false)
+const uploadLoading = ref(false)
+const uploadRef = ref(null)
+const uploadForm = reactive({
+  file: null,
+})
 
 const queryParams = reactive({
   pageNum: 1,
@@ -402,8 +426,10 @@ const getList = async () => {
       status: item.status ?? '',
       applicationDate: item.applicationDate ?? '',
     }))
-    tableData.value = list.map(mapFields)
-    total.value = tableData.value.length
+    total.value = rawList.length
+    const start = (queryParams.pageNum - 1) * queryParams.pageSize
+    const end = start + queryParams.pageSize
+    tableData.value = list.map(mapFields).slice(start, end)
   } catch (error) {
     console.error('获取列表失败:', error)
     ElMessage.error('获取列表失败')
@@ -512,7 +538,43 @@ const handleUploadCertificate = () => {
 
 const handleUploadNotification = () => {
   if (!ensureSelection()) return
-  ElMessage.success(`已上传通知，共 ${ids.value.length} 条`)
+  uploadDialogVisible.value = true
+}
+
+const handleFileChange = (file) => {
+  uploadForm.file = file.raw
+}
+
+const handleFileRemove = () => {
+  uploadForm.file = null
+}
+
+const handleDialogClose = () => {
+  if (uploadRef.value) {
+    uploadRef.value.clearFiles()
+  }
+  uploadForm.file = null
+}
+
+const handleConfirmUpload = async () => {
+  if (!uploadForm.file) {
+    ElMessage.warning('请先选择文件')
+    return
+  }
+  uploadLoading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', uploadForm.file)
+    await PatentIncomingAPI.parseZip(formData)
+    ElMessage.success('上传成功')
+    uploadDialogVisible.value = false
+    getList()
+  } catch (error) {
+    console.error('上传失败:', error)
+    ElMessage.error('上传失败')
+  } finally {
+    uploadLoading.value = false
+  }
 }
 
 watch(
@@ -530,6 +592,9 @@ onMounted(() => {
 <style scoped>
 .patentincoming-wrapper {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 /* 搜索模块样式 */
@@ -554,10 +619,22 @@ onMounted(() => {
 
 /* 内容区域样式 */
 .body-part-content {
-  padding: 16px;
   background: #fff;
   border-radius: 4px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.body-part-table-wrap {
+  padding: 16px;
+  overflow-x: auto;
+  overflow-y: visible;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .part-table-header {
@@ -567,6 +644,7 @@ onMounted(() => {
   margin-bottom: 15px;
   gap: 12px;
   width: 100%;
+  flex-shrink: 0;
 }
 
 .part-table-title {
@@ -614,5 +692,15 @@ onMounted(() => {
 .filter-item :deep(.el-select .el-input__wrapper) {
   height: auto;
   line-height: normal;
+}
+
+/* 表格填充剩余高度 */
+.table-fill-height {
+  flex: 1;
+  min-height: 0;
+}
+
+:deep(.table-fill-height .el-table__body-wrapper) {
+  overflow-y: auto;
 }
 </style>
