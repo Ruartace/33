@@ -116,6 +116,14 @@ const route = useRoute()
   min-height: 0;
   background-color: #e7eefc;
 }
+
+:deep(.el-main) {
+  padding: 16px;
+  overflow-y: auto;
+  height: calc(97vh - 60px);
+  box-sizing: border-box;
+}
+
 :deep(.el-menu) {
   border-right: none;
   background-color: #e7eefc;

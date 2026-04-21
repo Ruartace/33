@@ -1,8 +1,9 @@
 import axios from 'axios'
 
 const request = axios.create({
-  baseURL: 'http://8.140.210.30:8089',
+  baseURL: '/api',
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -19,6 +20,9 @@ request.interceptors.request.use(
 
 request.interceptors.response.use(
   (response) => {
+    if (response.config.responseType === 'blob') {
+      return response
+    }
     const res = response.data
     if (res.success === false) {
       console.error('请求失败:', res.message)

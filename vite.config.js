@@ -16,6 +16,12 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 5173,
+      proxy: {
+        '/api': {
+          target: 'http://8.140.210.30:8089',
+          changeOrigin: true,
+        },
+      },
     },
   }
 })

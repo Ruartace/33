@@ -213,31 +213,33 @@
       <div class="part-table-header">
         <div class="part-table-title">
           <span>专利电子来文</span>
-          <el-button type="primary" @click="handleRestoreNotImported" class="btn-upload">
+        </div>
+        <div class="part-table-actions">
+          <el-button type="primary" @click="handleRestoreNotImported">
             恢复未导入
           </el-button>
-          <el-button type="primary" @click="handleMoveToNoProcess" class="btn-upload">
+          <el-button type="primary" @click="handleMoveToNoProcess">
             转入无需处理
           </el-button>
-          <el-button type="primary" @click="handleImportToSystem" class="btn-upload">
+          <el-button type="primary" @click="handleImportToSystem">
             导入系统
           </el-button>
-          <el-button type="primary" @click="handleMatchProject" class="btn-upload">
+          <el-button type="primary" @click="handleMatchProject">
             匹配项目
           </el-button>
-          <el-button type="primary" @click="handleExportTable" class="btn-upload">
+          <el-button type="primary" @click="handleExportTable">
             <el-icon><DownloadIcon /></el-icon>
             导出表格
           </el-button>
-          <el-button type="primary" @click="handleUploadReceipt" class="btn-upload">
+          <el-button type="primary" @click="handleUploadReceipt">
             <el-icon><DownloadIcon /></el-icon>
             上传回执
           </el-button>
-          <el-button type="primary" @click="handleUploadCertificate" class="btn-upload">
+          <el-button type="primary" @click="handleUploadCertificate">
             <el-icon><DownloadIcon /></el-icon>
             上传证书
           </el-button>
-          <el-button type="primary" @click="handleUploadNotification" class="btn-upload">
+          <el-button type="primary" @click="handleUploadNotification">
             <el-icon><DownloadIcon /></el-icon>
             上传通知
           </el-button>
@@ -252,6 +254,7 @@
         border
         row-key="id"
         @selection-change="handleSelectionChange"
+        style="width: 100%"
       >
         <el-table-column type="selection" width="80" align="center" />
         <el-table-column label="序号" align="center" width="60">
@@ -510,18 +513,16 @@ onMounted(() => {
 
 <style scoped>
 .patentincoming-wrapper {
-  transform-origin: top left;
-
   box-sizing: border-box;
 }
 
 /* 搜索模块样式 */
 .body-part-search {
-  padding: 20px;
+  padding: 16px;
   background: #fff;
   border-radius: 4px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .filter-form {
@@ -537,7 +538,7 @@ onMounted(() => {
 
 /* 内容区域样式 */
 .body-part-content {
-  padding: 20px;
+  padding: 16px;
   background: #fff;
   border-radius: 4px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
@@ -549,22 +550,27 @@ onMounted(() => {
   align-items: flex-start;
   margin-bottom: 15px;
   gap: 12px;
+  width: 100%;
 }
 
 .part-table-title {
   font-size: 16px;
   font-weight: 600;
   color: #303133;
+  flex-shrink: 0;
+}
+
+.part-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   width: 100%;
 }
-.btn-upload {
-  margin-bottom: 20px;
-  float: right;
-  margin: 5px;
-}
+
 .el-pagination {
-  margin-top: 20px;
+  margin-top: 16px;
   text-align: right;
+  flex-wrap: wrap;
 }
 
 .filter-item {
