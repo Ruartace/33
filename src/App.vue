@@ -110,46 +110,12 @@ const route = useRoute()
   font-weight: 600;
   background-color: #e7eefc;
 }
-.aside-scroll {
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
-  background-color: #e7eefc;
-}
 
-:deep(.el-main) {
-  padding: 16px;
-  overflow-y: auto;
-  height: calc(97vh - 60px);
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-}
+
 
 :deep(.el-menu) {
   border-right: none;
   background-color: #e7eefc;
   scrollbar-width: none;
-}
-
-:deep(.el-menu-item.is-active) {
-  background-color: rgb(179, 212, 255) !important;
-}
-
-:deep(.el-sub-menu__title.is-active) {
-  background-color: rgb(179, 212, 255) !important;
-}
-
-:deep(.el-scrollbar__thumb) {
-  background-color: rgb(163, 199, 255) !important;
-}
-
-:deep(.el-scrollbar__bar) {
-  background-color: rgb(209, 231, 255) !important;
-  width: 6px !important;
-}
-
-:deep(.el-scrollbar__wrap:hover .el-scrollbar__bar) {
-  background-color: rgb(209, 231, 255) !important;
 }
 </style>
