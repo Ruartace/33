@@ -209,12 +209,12 @@
             {{ scope.$index + 1 }}
           </template>
         </el-table-column>
-        <el-table-column label="项目编号" prop="projectNumber" width="150" align="center" />
+        <el-table-column label="项目编号" prop="caseCode" width="150" align="center" />
         <el-table-column label="申请号" prop="applicationNo" width="150" align="center" />
-        <el-table-column label="项目名称" prop="projectName" min-width="200" align="center" />
-        <el-table-column label="来文类型" prop="sourceType" width="120" align="center" />
+        <el-table-column label="项目名称" prop="caseName" min-width="200" align="center" />
+        <el-table-column label="来文类型" prop="incomingDocType" width="120" align="center" />
         <el-table-column label="官方发文日" prop="officialDocumentDate" width="120" align="center" />
-        <el-table-column label="通知书编码" prop="notificationNumber" width="100" align="center" />
+        <el-table-column label="通知书编码" prop="notificationCode" width="100" align="center" />
         <el-table-column label="内部代码" prop="internalCode" width="100" align="center" />
         <el-table-column label="发文序列号" prop="documentSequenceNumber" width="130" align="center" />
         <el-table-column label="通知名称" prop="notificationName" width="120" align="center" />
@@ -355,17 +355,106 @@ const statusMap = {
   NO_NEED: '无需处理',
 }
 
+/**
+ * 将接口返回（蛇形 / 驼峰、parse-zip 等）规整为表格使用字段
+ */
+const normalizeIncomingItem = (item = {}) => {
+  const major = item.fileCategoryMajor ?? item.file_category_major
+  const minor = item.fileCategoryMinor ?? item.file_category_minor
+  const categoryLabel = [major, minor]
+    .filter((x) => x != null && String(x).trim() !== '')
+    .join('/')
+  const incomingDocType =
+    item.notificationType ??
+    item.notification_type ??
+    item.sourceType ??
+    item.source_type ??
+    item.documentType ??
+    item.document_type ??
+    categoryLabel ??
+    ''
+
+  return {
+    caseCode:
+      item.caseCode ??
+      item.case_code ??
+      item.project_no ??
+      item.projectNumber ??
+      '',
+    applicationNo:
+      item.applicationNo ??
+      item.application_no ??
+      item.applicationNumber ??
+      item.application_number ??
+      '',
+    caseName:
+      item.caseName ?? item.case_name ?? item.projectName ?? item.project_name ?? '',
+    incomingDocType,
+    officialDocumentDate:
+      item.officialDocumentDate ??
+      item.official_document_date ??
+      item.officialReleaseDate ??
+      item.official_release_date ??
+      item.issueDate ??
+      item.issue_date ??
+      '',
+    notificationCode:
+      item.notificationCode ??
+      item.notification_code ??
+      item.notification_number ??
+      item.notificationNumber ??
+      '',
+    internalCode: item.internalCode ?? item.internal_code ?? '',
+    documentSequenceNumber:
+      item.documentSequenceNumber ?? item.document_sequence_number ?? '',
+    notificationName: item.notificationName ?? item.notification_name ?? '',
+    applicationType: item.applicationType ?? item.application_type ?? '',
+    priorityExamination:
+      item.priorityExamination ??
+      item.priority_examination ??
+      item.optimisticApprovalCase ??
+      '',
+    preliminaryCase:
+      item.preliminaryCase ??
+      item.preliminary_case ??
+      item.preapprovalCase ??
+      '',
+    institutionNumber:
+      item.institutionNumber ??
+      item.institution_number ??
+      item.organizationAccount ??
+      item.organization_account ??
+      '',
+    customerName: item.customerName ?? item.customer_name ?? '',
+    notificationBrief: item.notificationBrief ?? item.notification_brief ?? '',
+    status: item.status ?? '',
+    applicationDate: item.applicationDate ?? item.application_date ?? '',
+  }
+}
+
 const mapFields = (row) => ({
   ...row,
   status: statusMap[row.status] ?? row.status ?? '',
-  priorityExamination: row.priorityExamination === 'Y' ? '是' : row.priorityExamination === 'N' ? '否' : '',
-  preliminaryCase: row.preliminaryCase === 'Y' ? '是' : row.preliminaryCase === 'N' ? '否' : '',
-  sourceType: row.sourceType ?? '',
-  applicationType: row.applicationType ?? '',
-  institutionNumber: row.institutionNumber ?? '',
-  customerName: row.customerName ?? '',
-  caseCode: row.caseCode ?? '',
-  notificationBrief: row.notificationBrief ?? '',
+  priorityExamination:
+    row.priorityExamination === 'Y'
+      ? '是'
+      : row.priorityExamination === 'N'
+        ? '否'
+        : row.priorityExamination === true
+          ? '是'
+          : row.priorityExamination === false
+            ? '否'
+            : (row.priorityExamination ?? ''),
+  preliminaryCase:
+    row.preliminaryCase === 'Y'
+      ? '是'
+      : row.preliminaryCase === 'N'
+        ? '否'
+        : row.preliminaryCase === true
+          ? '是'
+          : row.preliminaryCase === false
+            ? '否'
+            : (row.preliminaryCase ?? ''),
 })
 
 const ensureSelection = () => {
@@ -396,30 +485,23 @@ const getList = async () => {
       applicationDateEnd: queryParams.applicationTime?.[1] || null,
     }
     const res = await PatentIncomingAPI.getList(params)
-    const rawList = res.data || res || []
-    const list = rawList.map((item, index) => ({
-      id: item.id != null ? item.id : index + 1,
-      projectNumber: item.project_no ?? '',
-      applicationNo: item.application_no ?? '',
-      projectName: item.case_name ?? '',
-      sourceType: item.source_type ?? '',
-      officialDocumentDate: item.official_document_date ?? '',
-      notificationNumber: item.notification_code ?? '',
-      internalCode: item.internal_code ?? '',
-      documentSequenceNumber: item.document_sequence_number ?? '',
-      notificationName: item.notification_name ?? '',
-      applicationType: item.application_type ?? '',
-      priorityExamination: item.priority_examination ?? '',
-      preliminaryCase: item.preliminary_case ?? '',
-      institutionNumber: item.institution_number ?? '',
-      customerName: item.customer_name ?? '',
-      status: item.status ?? '',
-      applicationDate: item.application_date ?? '',
-    }))
-    total.value = rawList.length
+    let payload = res?.data !== undefined ? res.data : res
+    let rawList = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : payload?.list ?? payload?.records ?? []
+    if (!Array.isArray(rawList)) rawList = []
+    const list = rawList.map((item, index) =>
+      mapFields({
+        ...normalizeIncomingItem(item),
+        id: item.id != null ? item.id : index + 1,
+      }),
+    )
+    total.value = payload?.total ?? payload?.count ?? list.length
     const start = (queryParams.pageNum - 1) * queryParams.pageSize
     const end = start + queryParams.pageSize
-    tableData.value = list.map(mapFields).slice(start, end)
+    tableData.value = list.slice(start, end)
   } catch (error) {
     console.error('获取列表失败:', error)
     ElMessage.error('获取列表失败')
@@ -515,31 +597,23 @@ const handleMatchProject = async () => {
   loading.value = true
   try {
     const res = await PatentIncomingAPI.oneClickMatch({ ids: ids.value })
-    const rawList = res.data || []
+    let payload = res?.data !== undefined ? res.data : res
+    let rawList = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload?.data)
+        ? payload.data
+        : payload?.list ?? payload?.records ?? []
+    if (!Array.isArray(rawList)) rawList = []
 
-    const list = rawList.map((item) => ({
-      id: item.id,
-      projectNumber: item.project_no ?? '',
-      caseCode: item.case_code ?? '',
-      applicationNo: item.application_no ?? '',
-      projectName: item.case_name ?? '',
-      sourceType: item.source_type ?? '',
-      officialDocumentDate: item.official_document_date ?? '',
-      notificationNumber: item.notification_code ?? '',
-      internalCode: item.internal_code ?? '',
-      documentSequenceNumber: item.document_sequence_number ?? '',
-      notificationName: item.notification_name ?? '',
-      applicationType: item.application_type ?? '',
-      priorityExamination: item.priority_examination ?? '',
-      preliminaryCase: item.preliminary_case ?? '',
-      institutionNumber: item.institution_number ?? '',
-      customerName: item.customer_name ?? '',
-      status: item.status ?? '',
-      applicationDate: item.application_date ?? '',
-    }))
+    const list = rawList.map((item, index) =>
+      mapFields({
+        ...normalizeIncomingItem(item),
+        id: item.id != null ? item.id : index + 1,
+      }),
+    )
 
     total.value = list.length
-    tableData.value = list.map(mapFields)
+    tableData.value = list
     ElMessage.success(`一键匹配完成，共 ${list.length} 条`)
   } catch (error) {
     console.error('匹配失败:', error)
