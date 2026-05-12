@@ -46,36 +46,37 @@ const route = useRoute()
                 <el-icon><FolderOpened /></el-icon>
                 <span>来文管理</span>
               </template>
-
-              <el-sub-menu index="patent-mgmt">
-                <template #title>
-                  <el-icon><Document /></el-icon>
-                  <span>专利来文管理</span>
-                </template>
-                <el-menu-item index="/patent/electronic">
+  <el-menu-item index="/patent/electronic">
                   <el-icon><Message /></el-icon>
                   <span>专利电子来文</span>
                 </el-menu-item>
-                <el-menu-item index="/patent/no-action">
-                  <el-icon><CircleCheck /></el-icon>
-                  <span>专利无需处理</span>
-                </el-menu-item>
-              </el-sub-menu>
-
-              <el-sub-menu index="trademark-mgmt">
-                <template #title>
-                  <el-icon><Goods /></el-icon>
-                  <span>商标管理</span>
-                </template>
-                <el-menu-item index="/trademark/electronic">
+ <el-menu-item index="/trademark/electronic">
                   <el-icon><Message /></el-icon>
                   <span>商标电子来文</span>
                 </el-menu-item>
-                <el-menu-item index="/trademark/no-action">
+              <!-- <el-sub-menu index="patent-mgmt"> -->
+                <!-- <template #title>
+                  <el-icon><Document /></el-icon>
+                  <span>专利来文管理</span>
+                </template> -->
+              
+                <!-- <el-menu-item index="/patent/no-action">
+                  <el-icon><CircleCheck /></el-icon>
+                  <span>专利无需处理</span>
+                </el-menu-item> -->
+              <!-- </el-sub-menu> -->
+
+              <!-- <el-sub-menu index="trademark-mgmt"> -->
+                <!-- <template #title>
+                  <el-icon><Goods /></el-icon>
+                  <span>商标管理</span>
+                </template> -->
+               
+                <!-- <el-menu-item index="/trademark/no-action">
                   <el-icon><CircleCheck /></el-icon>
                   <span>商标无需处理</span>
-                </el-menu-item>
-              </el-sub-menu>
+                </el-menu-item> -->
+              <!-- </el-sub-menu> -->
             </el-sub-menu>
           </el-menu>
         </el-scrollbar>
