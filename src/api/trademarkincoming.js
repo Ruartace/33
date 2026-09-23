@@ -75,6 +75,14 @@ export const TrademarkIncomingAPI = {
       data,
     })
   },
+  /** POST /api/trademark-match/trans-status — 失败态/无需处理 → 内部代码唯一 */
+  transStatus(data = {}) {
+    return request({
+      url: '/trademark-match/trans-status',
+      method: 'post',
+      data,
+    })
+  },
   /** GET /api/user/options 人员选项（支持模糊查询） */
   getUserOptions(name) {
     return request({

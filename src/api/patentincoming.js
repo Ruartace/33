@@ -72,4 +72,12 @@ export const PatentIncomingAPI = {
       data,
     })
   },
+  /** POST /api/ruidao/trans-status — 失败态/无需处理 → 内部代码唯一 */
+  transStatus(data = {}) {
+    return request({
+      url: '/ruidao/trans-status',
+      method: 'post',
+      data,
+    })
+  },
 }

@@ -18,12 +18,8 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       proxy: {
         '/api': {
-<<<<<<< HEAD
-          target: 'http://8.140.210.30:6660',
-=======
           // 与 .env.development 中的 VITE_APP_BASE_URL 对齐（统一指向 8089）
           target: 'http://8.140.210.30:8089',
->>>>>>> main
           changeOrigin: true,
         },
       },

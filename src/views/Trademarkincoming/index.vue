@@ -222,6 +222,9 @@
           <el-button type="primary" @click="handleMoveToNoProcess">
             转入无需处理
           </el-button>
+          <el-button type="primary" @click="handleTransStatus">
+            转状态
+          </el-button>
           <el-button type="primary" @click="handleImportToSystem">
             导入系统
           </el-button>
@@ -699,6 +702,44 @@ const handleMoveToNoProcess = async () => {
     getList()
   } catch (error) {
     ElMessage.error(error?.message || '转入无需处理失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 失败态 / 无需处理 → 内部代码唯一，以便重新匹配、导入 */
+const handleTransStatus = async () => {
+  if (!ensureSelection()) return
+  const selectedIds = (ids.value || []).filter((id) => id != null && id !== '')
+  if (selectedIds.length === 0) {
+    ElMessage.warning('所选记录缺少有效 id，无法转状态')
+    return
+  }
+  loading.value = true
+  try {
+    const res = await TrademarkIncomingAPI.transStatus({ ids: selectedIds })
+    const data = res?.data ?? {}
+    const updated = data.updatedCount ?? 0
+    const skipped = data.skippedCount ?? 0
+    const summary =
+      res?.message ||
+      data.message ||
+      `转状态完成：已转 ${updated} 条为「内部代码唯一」，未转 ${skipped} 条`
+    if (skipped > 0 && updated === 0) {
+      const reasons = (Array.isArray(data.details) ? data.details : [])
+        .filter((d) => d && d.updated === false)
+        .map((d) => d.message)
+        .filter(Boolean)
+        .slice(0, 3)
+      ElMessage.warning(reasons.length ? `${summary}（${reasons.join('；')}）` : summary)
+    } else if (skipped > 0) {
+      ElMessage.warning(summary)
+    } else {
+      ElMessage.success(summary)
+    }
+    getList()
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.message ?? error?.message ?? '转状态失败')
   } finally {
     loading.value = false
   }
