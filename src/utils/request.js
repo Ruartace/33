@@ -1,9 +1,11 @@
 import axios from 'axios'
 
+const withCredentials = String(import.meta.env.VITE_APP_WITH_CREDENTIALS ?? '') === 'true'
+
 const request = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_APP_BASE_API || '/api',
   timeout: 30000,
-  withCredentials: true,
+  withCredentials,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -32,7 +34,7 @@ request.interceptors.response.use(
       return response
     }
     const res = response.data
-    if (res.success === false) {
+    if (res && typeof res === 'object' && 'success' in res && res.success === false) {
       console.error('请求失败:', res.message)
       return Promise.reject(new Error(res.message || '请求失败'))
     }

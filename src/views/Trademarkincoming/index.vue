@@ -81,6 +81,7 @@
                   range-separator="至"
                   start-placeholder="开始日期"
                   end-placeholder="结束日期"
+                  class="filter-item"
                 />
               </el-form-item>
             </el-col>
@@ -121,8 +122,9 @@
               <el-form-item label="申请类型" prop="applicationType">
                 <el-select
                   v-model="queryParams.applicationType"
-                  placeholder="请选择申请类型"
+                  placeholder="请选择或搜索申请类型"
                   clearable
+                  filterable
                   class="filter-item"
                 >
                   <el-option
@@ -154,32 +156,31 @@
                   range-separator="至"
                   start-placeholder="开始日期"
                   end-placeholder="结束日期"
+                  class="filter-item"
                 />
               </el-form-item>
             </el-col>
             <el-col :span="8">
               <el-form-item label="机构账号" prop="organizationAccount">
-                <el-select
+                <el-input
                   v-model="queryParams.organizationAccount"
-                  placeholder="请选择机构账号"
+                  placeholder="请输入机构账号"
                   clearable
                   class="filter-item"
-                >
-                  <el-option
-                    v-for="item in organizationAccountOptions"
-                    :key="item.value"
-                    :label="item.label"
-                    :value="item.value"
-                  />
-                </el-select>
+                  @keyup.enter="handleQuery"
+                />
               </el-form-item>
             </el-col>
             <el-col :span="8">
-              <el-form-item label="分析人员" prop="analyst">
+              <el-form-item label="分析人员" prop="analystUserId">
                 <el-select
-                  v-model="queryParams.analyst"
-                  placeholder="请选择分析人员"
+                  v-model="queryParams.analystUserId"
+                  placeholder="请选择或搜索分析人员"
                   clearable
+                  filterable
+                  remote
+                  :remote-method="fetchUserOptions"
+                  :loading="userLoading"
                   class="filter-item"
                 >
                   <el-option
@@ -239,9 +240,9 @@
             <el-icon><DownloadIcon /></el-icon>
             上传证书
           </el-button>
-          <el-button type="primary" @click="handleUploadNotification">
+          <el-button type="primary" @click="handleUploadNotice">
             <el-icon><DownloadIcon /></el-icon>
-            上传通知
+            上传通知书
           </el-button>
         </div>
       </div>
@@ -264,65 +265,177 @@
         </el-table-column>
         <el-table-column label="项目编号" prop="projectNumber" width="150" align="center" />
         <el-table-column label="注册号" prop="registrationNumber" width="120" align="center" />
-        <el-table-column label="类别" prop="category" width="100" align="center" />
         <el-table-column label="项目名称" prop="projectName" min-width="200" align="center" />
-        <el-table-column label="文件类型" prop="fileType" width="120" align="center" />
+        <el-table-column label="文件类型" prop="fileType" width="100" align="center" />
         <el-table-column label="收文日" prop="receiptDate" width="120" align="center" />
         <el-table-column label="申请号" prop="applicationNumber" width="130" align="center" />
         <el-table-column label="内部代码" prop="internalCode" width="100" align="center" />
         <el-table-column label="通知名称" prop="notificationName" width="120" align="center" />
         <el-table-column label="业务类型" prop="businessType" width="120" align="center" />
-        <el-table-column label="机构" prop="organization" width="120" align="center" />
-        <el-table-column label="客户名称" prop="customerName" width="120" align="center" />
-        <el-table-column label="技术主导" prop="technicalLead" width="120" align="center" />
-        <el-table-column label="状态" prop="status" width="120" align="center" />
+        <el-table-column label="机构" prop="organization" width="100" align="center" />
+        <el-table-column label="客户名称" prop="customerName" min-width="140" align="center" />
+        <el-table-column label="技术主导" prop="technicalLead" width="100" align="center" />
+        <el-table-column label="状态" prop="status" width="100" align="center" />
       </el-table>
       <!-- 分页 -->
       <el-pagination
         v-show="total > 0"
         :total="total"
-        v-model:current-page="queryParams.pageNum"
-        v-model:page-size="queryParams.pageSize"
+        :current-page="queryParams.pageNum"
+        :page-size="queryParams.pageSize"
         :page-sizes="[10, 20, 50, 100]"
         layout="total, sizes, prev, pager, next, jumper"
-        @size-change="handleSizeChange"
         @current-change="handleCurrentChange"
+        @size-change="handleSizeChange"
       />
     </div>
 
     <el-dialog
       v-model="receiptDialogVisible"
       title="上传回执"
-      width="520px"
-      destroy-on-close
+      width="500px"
       @closed="resetReceiptDialog"
     >
-      <el-form label-width="100px">
-        <el-form-item label="ZIP 包" required>
-          <input
-            ref="receiptZipInputRef"
-            type="file"
-            accept=".zip,application/zip"
-            class="receipt-file-input"
-            @change="onReceiptZipChange"
-          />
-          <span v-if="receiptZip?.name" class="receipt-file-name">{{ receiptZip.name }}</span>
+      <el-form :model="receiptForm" label-width="100px">
+        <el-form-item label="ZIP 包">
+          <el-upload
+            ref="receiptZipUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            :on-change="onReceiptZipChange"
+            :on-remove="onReceiptZipRemove"
+            accept=".zip,.rar,.7z"
+            drag
+          >
+            <el-icon><UploadFilled /></el-icon>
+            <span>将 ZIP 文件拖到此处，或<em>点击上传</em></span>
+            <template #tip>
+              <div class="el-upload__tip">支持 .zip/.rar/.7z 格式文件</div>
+            </template>
+          </el-upload>
         </el-form-item>
-        <el-form-item label="Excel 表" required>
-          <input
-            ref="receiptExcelInputRef"
-            type="file"
-            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-            class="receipt-file-input"
-            @change="onReceiptExcelChange"
-          />
-          <span v-if="receiptExcel?.name" class="receipt-file-name">{{ receiptExcel.name }}</span>
+        <el-form-item label="Excel 表">
+          <el-upload
+            ref="receiptExcelUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            :on-change="onReceiptExcelChange"
+            :on-remove="onReceiptExcelRemove"
+            accept=".xlsx,.xls"
+            drag
+          >
+            <el-icon><UploadFilled /></el-icon>
+            <span>将 Excel 文件拖到此处，或<em>点击上传</em></span>
+            <template #tip>
+              <div class="el-upload__tip">支持 .xlsx/.xls 格式文件</div>
+            </template>
+          </el-upload>
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="receiptDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="receiptUploading" @click="submitReceiptUpload">
-          上传
+          确认上传
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="certificateDialogVisible"
+      title="上传证书"
+      width="500px"
+      @closed="resetCertificateDialog"
+    >
+      <el-form :model="certificateForm" label-width="100px">
+        <el-form-item label="ZIP 包">
+          <el-upload
+            ref="certificateZipUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            :on-change="onCertificateZipChange"
+            :on-remove="onCertificateZipRemove"
+            accept=".zip,.rar,.7z"
+            drag
+          >
+            <el-icon><UploadFilled /></el-icon>
+            <span>将 ZIP 文件拖到此处，或<em>点击上传</em></span>
+            <template #tip>
+              <div class="el-upload__tip">支持 .zip/.rar/.7z 格式文件</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="Excel 表">
+          <el-upload
+            ref="certificateExcelUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            :on-change="onCertificateExcelChange"
+            :on-remove="onCertificateExcelRemove"
+            accept=".xlsx,.xls"
+            drag
+          >
+            <el-icon><UploadFilled /></el-icon>
+            <span>将 Excel 文件拖到此处，或<em>点击上传</em></span>
+            <template #tip>
+              <div class="el-upload__tip">支持 .xlsx/.xls 格式文件</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="certificateDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="certificateUploading" @click="submitCertificateUpload">
+          确认上传
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="noticeDialogVisible"
+      title="上传通知书"
+      width="500px"
+      @closed="resetNoticeDialog"
+    >
+      <el-form :model="noticeForm" label-width="100px">
+        <el-form-item label="ZIP 包">
+          <el-upload
+            ref="noticeZipUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            :on-change="onNoticeZipChange"
+            :on-remove="onNoticeZipRemove"
+            accept=".zip,.rar,.7z"
+            drag
+          >
+            <el-icon><UploadFilled /></el-icon>
+            <span>将 ZIP 文件拖到此处，或<em>点击上传</em></span>
+            <template #tip>
+              <div class="el-upload__tip">支持 .zip/.rar/.7z 格式文件</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+        <el-form-item label="Excel 表">
+          <el-upload
+            ref="noticeExcelUploadRef"
+            :auto-upload="false"
+            :limit="1"
+            :on-change="onNoticeExcelChange"
+            :on-remove="onNoticeExcelRemove"
+            accept=".xlsx,.xls"
+            drag
+          >
+            <el-icon><UploadFilled /></el-icon>
+            <span>将 Excel 文件拖到此处，或<em>点击上传</em></span>
+            <template #tip>
+              <div class="el-upload__tip">支持 .xlsx/.xls 格式文件</div>
+            </template>
+          </el-upload>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="noticeDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="noticeUploading" @click="submitNoticeUpload">
+          确认上传
         </el-button>
       </template>
     </el-dialog>
@@ -336,6 +449,7 @@ import {
   Search as SearchIcon,
   Refresh as RefreshIcon,
   Download as DownloadIcon,
+  UploadFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { TrademarkIncomingAPI } from '@/api/trademarkincoming'
@@ -367,39 +481,58 @@ const queryParams = reactive({
   uploadTime: '',
   organizationAccount: '',
   analyst: '',
+  analystUserId: '',
 })
 
 const documentTypeOptions = [
-  { label: '受理通知书', value: '受理通知书' },
-  { label: '初审合格通知', value: '初审合格通知' },
-  { label: '驳回通知书', value: '驳回通知书' },
-  { label: '续展核准通知书', value: '续展核准通知书' },
-]
-
-const applicationTypeOptions = [
-  { label: '注册申请', value: '注册申请' },
-  { label: '变更申请', value: '变更申请' },
-  { label: '续展申请', value: '续展申请' },
-  { label: '转让申请', value: '转让申请' },
+  { label: '通知书', value: '通知书' },
+  { label: '证书', value: '证书' },
+  { label: '回执', value: '回执' },
 ]
 
 const statusOptions = [
+  // 与后端 TrademarkResponse.status 字段枚举对齐
   { label: '未处理', value: '未处理' },
-  { label: '处理中', value: '处理中' },
-  { label: '已完成', value: '已完成' },
+  { label: '匹配成功', value: '匹配成功' },
+  { label: '匹配失败', value: '匹配失败' },
+  { label: '无需处理', value: '无需处理' },
 ]
 
-const organizationAccountOptions = [
-  { label: 'TR-ORG-01', value: 'TR-ORG-01' },
-  { label: 'TR-ORG-02', value: 'TR-ORG-02' },
-  { label: 'TR-ORG-03', value: 'TR-ORG-03' },
-]
+const analystOptions = ref([])
+const userLoading = ref(false)
 
-const analystOptions = [
-  { label: '张三', value: '张三' },
-  { label: '李四', value: '李四' },
-  { label: '王五', value: '王五' },
-]
+const fetchUserOptions = async (query) => {
+  userLoading.value = true
+  try {
+    const res = await TrademarkIncomingAPI.getUserOptions(query)
+    const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []
+    analystOptions.value = list.map((item) => ({
+      label: item.realName,
+      value: item.id || item.value,
+    }))
+  } catch (error) {
+    console.error('获取分析人员失败:', error)
+    analystOptions.value = []
+  } finally {
+    userLoading.value = false
+  }
+}
+
+const applicationTypeOptions = ref([])
+
+const fetchApplyTypeOptions = async () => {
+  try {
+    const res = await TrademarkIncomingAPI.getApplyTypeOptions()
+    const list = Array.isArray(res?.data) ? res.data : []
+    applicationTypeOptions.value = list.map((item) => ({
+      label: item.applyTypeName,
+      value: item.applyTypeName,
+    }))
+  } catch (error) {
+    console.error('获取申请类型失败:', error)
+    applicationTypeOptions.value = []
+  }
+}
 
 const ensureSelection = () => {
   if (!ids.value || ids.value.length === 0) {
@@ -409,36 +542,62 @@ const ensureSelection = () => {
   return true
 }
 
-const getList = async () => {
+// 真正发起请求的函数：服务端分页，每次都按 pageNum/pageSize 请求后端
+const fetchList = async () => {
   loading.value = true
   try {
+    const receiptTime = queryParams.receiptTime
+    const uploadTime = queryParams.uploadTime
     const params = {
+      projectNumber: queryParams.projectNumber || null,
+      applicationNo: queryParams.applicationNumber || null,
+      registrationNumber: queryParams.registrationNumber || null,
+      projectName: queryParams.projectName || null,
+      customerName: queryParams.customerName || null,
+      status: queryParams.status || null,
+      documentType: queryParams.documentType || null,
+      technicalLead: queryParams.technicalLead || null,
+      notificationName: queryParams.notificationName || null,
+      applicationType: queryParams.applicationType || null,
+      organizationAccount: queryParams.organizationAccount || null,
+      analystUserId: queryParams.analystUserId || null,
+      receiveDateStart: Array.isArray(receiptTime) ? receiptTime[0] : null,
+      receiveDateEnd: Array.isArray(receiptTime) ? receiptTime[1] : null,
+      uploadTimeStart: Array.isArray(uploadTime) ? uploadTime[0] : null,
+      uploadTimeEnd: Array.isArray(uploadTime) ? uploadTime[1] : null,
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
-      projectNo: queryParams.projectNumber,
-      applicationNo: queryParams.applicationNumber,
-      registrationNo: queryParams.registrationNumber,
-      status: queryParams.status,
-      sourceType: queryParams.documentType,
-      caseName: queryParams.projectName,
-      customerName: queryParams.customerName,
     }
-    
+
     const res = await TrademarkIncomingAPI.getList(params)
-    tableData.value = (res.data || []).map((item) => ({
+
+    const list = Array.isArray(res?.data) ? res.data : []
+    tableData.value = list.map((item) => ({
       id: item.id,
-      projectNumber: item.projectNo,
+      projectNumber: item.caseCode,
       applicationNumber: item.applicationNo,
       registrationNumber: item.registrationNo,
       projectName: item.caseName,
-      internalCode: item.caseCode,
       customerName: item.customerName,
+      internalCode: item.internalCode,
       fileType: item.sourceType,
-      status: item.status,
+      receiptDate: item.receiveDate,
+      notificationName: item.notificationName,
+      businessType: item.businessType,
+      technicalLead: item.technicalLead,
       organization: item.agencyCode,
+      status: item.status,
       caseId: item.caseId,
+      applicationType: item.applicationType,
+      uploadTime: item.uploadTime,
+      fileName: item.fileName,
     }))
-    total.value = res.data?.length || 0
+
+    const serverTotal = Number(res?.total)
+    total.value =
+      Number.isFinite(serverTotal) && serverTotal > 0
+        ? serverTotal
+        : tableData.value.length
   } catch (error) {
     console.error('获取数据失败:', error)
     ElMessage.error('获取数据失败')
@@ -446,6 +605,9 @@ const getList = async () => {
     loading.value = false
   }
 }
+
+// 保留旧名 getList 给 watch/onMounted 调用
+const getList = () => fetchList()
 
 const handleQuery = () => {
   queryParams.pageNum = 1
@@ -473,16 +635,20 @@ const handleReset = () => {
   queryParams.uploadTime = ''
   queryParams.organizationAccount = ''
   queryParams.analyst = ''
+  queryParams.analystUserId = ''
   handleSearch()
 }
 
 const handleSizeChange = (size) => {
   queryParams.pageSize = size
+  queryParams.pageNum = 1
+  // 走服务端分页：每次都重新请求后端
   getList()
 }
 
 const handleCurrentChange = (page) => {
   queryParams.pageNum = page
+  // 走服务端分页：每次都重新请求后端
   getList()
 }
 
@@ -553,13 +719,24 @@ const handleImportToSystem = async () => {
 }
 
 const handleMatchProject = async () => {
+  if (!ensureSelection()) return
   loading.value = true
   try {
-    const res = await TrademarkIncomingAPI.oneClickMatch()
-    ElMessage.success(res.message || `匹配完成，成功: ${res.successCount}，失败: ${res.failCount}`)
+    const res = await TrademarkIncomingAPI.oneClickMatch({ ids: ids.value })
+    const data = res?.data ?? res ?? {}
+    const matched = data.matchedCount ?? 0
+    const failed = data.failedCount ?? 0
+    const failedItems = Array.isArray(data.failedItems) ? data.failedItems : []
+    if (failedItems.length > 0) {
+      const codes = failedItems.map((i) => i.caseCode).join('、')
+      ElMessage.warning(`匹配完成，成功 ${matched} 条，失败 ${failed} 条（未匹配到案件：${codes}）`)
+    } else {
+      ElMessage.success(`匹配完成，成功 ${matched} 条${failed > 0 ? `，失败 ${failed} 条` : ''}`)
+    }
     getList()
   } catch (error) {
-    ElMessage.error(error.message || '匹配失败')
+    const msg = error?.response?.data?.message ?? error?.message ?? '匹配失败'
+    ElMessage.error(msg)
   } finally {
     loading.value = false
   }
@@ -633,27 +810,101 @@ const handleExportTable = async () => {
 }
 
 const receiptDialogVisible = ref(false)
-const receiptZip = ref(null)
-const receiptExcel = ref(null)
-const receiptZipInputRef = ref(null)
-const receiptExcelInputRef = ref(null)
 const receiptUploading = ref(false)
+const receiptZipUploadRef = ref(null)
+const receiptExcelUploadRef = ref(null)
+const receiptForm = reactive({
+  zip: null,
+  excel: null,
+})
 
-const onReceiptZipChange = (e) => {
-  const f = e.target?.files?.[0]
-  receiptZip.value = f || null
+const onReceiptZipChange = (file) => {
+  receiptForm.zip = file.raw
 }
 
-const onReceiptExcelChange = (e) => {
-  const f = e.target?.files?.[0]
-  receiptExcel.value = f || null
+const onReceiptZipRemove = () => {
+  receiptForm.zip = null
+}
+
+const onReceiptExcelChange = (file) => {
+  receiptForm.excel = file.raw
+}
+
+const onReceiptExcelRemove = () => {
+  receiptForm.excel = null
 }
 
 const resetReceiptDialog = () => {
-  receiptZip.value = null
-  receiptExcel.value = null
-  if (receiptZipInputRef.value) receiptZipInputRef.value.value = ''
-  if (receiptExcelInputRef.value) receiptExcelInputRef.value.value = ''
+  receiptForm.zip = null
+  receiptForm.excel = null
+  receiptZipUploadRef.value?.clearFiles()
+  receiptExcelUploadRef.value?.clearFiles()
+}
+
+// ========== 证书上传 ==========
+const certificateDialogVisible = ref(false)
+const certificateUploading = ref(false)
+const certificateZipUploadRef = ref(null)
+const certificateExcelUploadRef = ref(null)
+const certificateForm = reactive({
+  zip: null,
+  excel: null,
+})
+
+const onCertificateZipChange = (file) => {
+  certificateForm.zip = file.raw
+}
+
+const onCertificateZipRemove = () => {
+  certificateForm.zip = null
+}
+
+const onCertificateExcelChange = (file) => {
+  certificateForm.excel = file.raw
+}
+
+const onCertificateExcelRemove = () => {
+  certificateForm.excel = null
+}
+
+const resetCertificateDialog = () => {
+  certificateForm.zip = null
+  certificateForm.excel = null
+  certificateZipUploadRef.value?.clearFiles()
+  certificateExcelUploadRef.value?.clearFiles()
+}
+
+// ========== 通知书上传 ==========
+const noticeDialogVisible = ref(false)
+const noticeUploading = ref(false)
+const noticeZipUploadRef = ref(null)
+const noticeExcelUploadRef = ref(null)
+const noticeForm = reactive({
+  zip: null,
+  excel: null,
+})
+
+const onNoticeZipChange = (file) => {
+  noticeForm.zip = file.raw
+}
+
+const onNoticeZipRemove = () => {
+  noticeForm.zip = null
+}
+
+const onNoticeExcelChange = (file) => {
+  noticeForm.excel = file.raw
+}
+
+const onNoticeExcelRemove = () => {
+  noticeForm.excel = null
+}
+
+const resetNoticeDialog = () => {
+  noticeForm.zip = null
+  noticeForm.excel = null
+  noticeZipUploadRef.value?.clearFiles()
+  noticeExcelUploadRef.value?.clearFiles()
 }
 
 const handleUploadReceipt = () => {
@@ -661,8 +912,8 @@ const handleUploadReceipt = () => {
 }
 
 const submitReceiptUpload = async () => {
-  const zip = receiptZip.value
-  const excel = receiptExcel.value
+  const zip = receiptForm.zip
+  const excel = receiptForm.excel
   if (!zip || !excel) {
     ElMessage.warning('请同时选择 ZIP 压缩包与 Excel 文件')
     return
@@ -684,13 +935,99 @@ const submitReceiptUpload = async () => {
 }
 
 const handleUploadCertificate = () => {
-  if (!ensureSelection()) return
-  ElMessage.success(`已上传证书，共 ${ids.value.length} 条`)
+  certificateDialogVisible.value = true
 }
 
-const handleUploadNotification = () => {
-  if (!ensureSelection()) return
-  ElMessage.success(`已上传通知，共 ${ids.value.length} 条`)
+const submitCertificateUpload = async () => {
+  const zip = certificateForm.zip
+  const excel = certificateForm.excel
+  if (!zip || !excel) {
+    ElMessage.warning('请同时选择 ZIP 压缩包与 Excel 文件')
+    return
+  }
+  certificateUploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', zip, zip.name)
+    formData.append('excel', excel, excel.name)
+    formData.append('user_id', localStorage.getItem('userId') || '')
+    const res = await TrademarkIncomingAPI.uploadDoc(formData)
+    const data = res?.data ?? {}
+    const msgs = Array.isArray(data.messages) ? data.messages : []
+    const summary =
+      `解析 ${data.pdfCount ?? 0} 条 PDF，` +
+      `通知书 ${data.noticeCount ?? 0}、证书 ${data.certificateCount ?? 0}，` +
+      `入库 ${data.insertedCount ?? 0} 条，` +
+      `失败 ${data.failedCount ?? 0} 条`
+    if (res?.success) {
+      if (msgs.length > 0) {
+        ElMessage.warning({
+          message: `${summary}\n${msgs.join('\n')}`,
+          duration: 0,
+          showClose: true,
+          customClass: 'el-message-multiline',
+        })
+      } else {
+        ElMessage.success(summary)
+      }
+      certificateDialogVisible.value = false
+      getList()
+    } else {
+      ElMessage.error(res?.message || '处理失败')
+    }
+  } catch (error) {
+    ElMessage.error(error?.message || '上传失败')
+  } finally {
+    certificateUploading.value = false
+  }
+}
+
+const handleUploadNotice = () => {
+  noticeDialogVisible.value = true
+}
+
+const submitNoticeUpload = async () => {
+  const zip = noticeForm.zip
+  const excel = noticeForm.excel
+  if (!zip || !excel) {
+    ElMessage.warning('请同时选择 ZIP 压缩包与 Excel 文件')
+    return
+  }
+  noticeUploading.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', zip, zip.name)
+    formData.append('excel', excel, excel.name)
+    formData.append('user_id', localStorage.getItem('userId') || '')
+    const res = await TrademarkIncomingAPI.uploadDoc(formData)
+    const data = res?.data ?? {}
+    const msgs = Array.isArray(data.messages) ? data.messages : []
+    const summary =
+      `解析 ${data.pdfCount ?? 0} 条 PDF，` +
+      `通知书 ${data.noticeCount ?? 0}、证书 ${data.certificateCount ?? 0}，` +
+      `入库 ${data.insertedCount ?? 0} 条，` +
+      `失败 ${data.failedCount ?? 0} 条`
+    if (res?.success) {
+      if (msgs.length > 0) {
+        ElMessage.warning({
+          message: `${summary}\n${msgs.join('\n')}`,
+          duration: 0,
+          showClose: true,
+          customClass: 'el-message-multiline',
+        })
+      } else {
+        ElMessage.success(summary)
+      }
+      noticeDialogVisible.value = false
+      getList()
+    } else {
+      ElMessage.error(res?.message || '处理失败')
+    }
+  } catch (error) {
+    ElMessage.error(error?.message || '上传失败')
+  } finally {
+    noticeUploading.value = false
+  }
 }
 
 watch(
@@ -702,6 +1039,8 @@ watch(
 
 onMounted(() => {
   getList()
+  fetchApplyTypeOptions()
+  fetchUserOptions('')
 })
 </script>
 
@@ -794,15 +1133,8 @@ onMounted(() => {
   line-height: normal;
 }
 
-.receipt-file-input {
-  display: block;
-  max-width: 100%;
-}
-.receipt-file-name {
-  display: block;
-  margin-top: 6px;
-  font-size: 12px;
-  color: #606266;
-  word-break: break-all;
+:deep(.el-message-multiline) {
+  white-space: pre-line;
+  max-width: 60vw;
 }
 </style>

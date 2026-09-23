@@ -8,6 +8,13 @@ export const PatentIncomingAPI = {
       params,
     })
   },
+  getApplyTypeOptions(name) {
+    return request({
+      url: '/apply-type/options',
+      method: 'get',
+      params: name ? { name } : {},
+    })
+  },
   exportExcel(ids) {
     return request({
       url: '/ruidao/realtime-search/export',
@@ -56,6 +63,13 @@ export const PatentIncomingAPI = {
       url: '/ruidao/move-no-need',
       method: 'post',
       data: params,
+    })
+  },
+  importProcesses(data = {}) {
+    return request({
+      url: '/ruidao/import-processes',
+      method: 'post',
+      data,
     })
   },
 }
