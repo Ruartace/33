@@ -116,8 +116,9 @@
               <el-form-item label="申请类型" prop="applicationType">
                 <el-select
                   v-model="queryParams.applicationType"
-                  placeholder="请选择申请类型"
+                  placeholder="请选择或搜索申请类型"
                   clearable
+                  filterable
                   class="filter-item"
                 >
                   <el-option
@@ -129,13 +130,13 @@
                 </el-select>
               </el-form-item>
             </el-col>
-            <el-col :span="8">
-              <el-form-item label="优审案">
+            <el-col :span="2">
+              <el-form-item >
                 <el-checkbox v-model="queryParams.PriorityReview">优审案</el-checkbox>
               </el-form-item>
             </el-col>
-            <el-col :span="8">
-              <el-form-item label="预审案">
+            <el-col :span="6">
+              <el-form-item >
                 <el-checkbox v-model="queryParams.PreliminaryReview">预审案</el-checkbox>
               </el-form-item>
             </el-col>
@@ -284,7 +285,7 @@ import {
 import { ElMessage } from 'element-plus'
 import { PatentIncomingAPI } from '@/api/patentincoming'
 
-defineOptions({ name: 'TrademarkIncomingPage' })
+defineOptions({ name: 'PatentIncomingPage' })
 
 const route = useRoute()
 
@@ -317,21 +318,34 @@ const queryParams = reactive({
   PreliminaryReview: false,
 })
 
-const applicationTypeOptions = [
-  { label: '发明', value: '发明' },
-  { label: '实用新型', value: '实用新型' },
-  { label: '外观', value: '外观' },
-  { label: '商标', value: '商标' },
-]
+const applicationTypeOptions = ref([])
+
+const fetchApplyTypeOptions = async () => {
+  try {
+    const res = await PatentIncomingAPI.getApplyTypeOptions()
+    const list = Array.isArray(res?.data) ? res.data : []
+    applicationTypeOptions.value = list.map((item) => ({
+      label: item.applyTypeName,
+      value: item.applyTypeName,
+    }))
+  } catch (error) {
+    console.error('获取申请类型失败:', error)
+    applicationTypeOptions.value = []
+  }
+}
 
 const priorityExaminationOptions = [
-  { label: '是', value: 'Y' },
-  { label: '否', value: 'N' },
+  // 后端契约：priorityExamination 取值为字符串 "true"/"false"
+  // 页面用 el-checkbox 直接控制 queryParams.PriorityReview（boolean），
+  // 提交时映射为 'true' / null。保留空数组防止有人改回下拉时漏配。
+  { label: '是', value: 'true' },
+  { label: '否', value: 'false' },
 ]
 
 const preliminaryCaseOptions = [
-  { label: '是', value: 'Y' },
-  { label: '否', value: 'N' },
+  // 同上：preliminaryCase 取值为字符串 "true"/"false"
+  { label: '是', value: 'true' },
+  { label: '否', value: 'false' },
 ]
 
 const statusOptions = [
@@ -435,26 +449,23 @@ const normalizeIncomingItem = (item = {}) => {
 const mapFields = (row) => ({
   ...row,
   status: statusMap[row.status] ?? row.status ?? '',
+  // 优先按后端契约 "true"/"false" 映射；兼容历史数据中的 Y/N、布尔值；其余原样展示
   priorityExamination:
-    row.priorityExamination === 'Y'
+    row.priorityExamination === 'true' || row.priorityExamination === true || row.priorityExamination === 'Y'
       ? '是'
-      : row.priorityExamination === 'N'
+      : row.priorityExamination === 'false' ||
+          row.priorityExamination === false ||
+          row.priorityExamination === 'N'
         ? '否'
-        : row.priorityExamination === true
-          ? '是'
-          : row.priorityExamination === false
-            ? '否'
-            : (row.priorityExamination ?? ''),
+        : (row.priorityExamination ?? ''),
   preliminaryCase:
-    row.preliminaryCase === 'Y'
+    row.preliminaryCase === 'true' || row.preliminaryCase === true || row.preliminaryCase === 'Y'
       ? '是'
-      : row.preliminaryCase === 'N'
+      : row.preliminaryCase === 'false' ||
+          row.preliminaryCase === false ||
+          row.preliminaryCase === 'N'
         ? '否'
-        : row.preliminaryCase === true
-          ? '是'
-          : row.preliminaryCase === false
-            ? '否'
-            : (row.preliminaryCase ?? ''),
+        : (row.preliminaryCase ?? ''),
 })
 
 const ensureSelection = () => {
@@ -468,8 +479,11 @@ const ensureSelection = () => {
 const getList = async () => {
   loading.value = true
   try {
+    // 日期区间拆成 Start/End，且空值用 null 过滤（避免发送空字符串导致后端判定为错误格式）
+    const [issueStart, issueEnd] = queryParams.issueTime || []
+    const [applyStart, applyEnd] = queryParams.applicationTime || []
     const params = {
-      projectNo: queryParams.projectNo || null,
+      caseCode: queryParams.projectNo || null,
       institutionNumber: queryParams.institutionNumber || null,
       applicationNo: queryParams.applicationNumber || null,
       caseName: queryParams.projectName || null,
@@ -477,12 +491,12 @@ const getList = async () => {
       notificationName: queryParams.notificationName || null,
       applicationType: queryParams.applicationType || null,
       status: queryParams.status || null,
-      preliminaryCase: queryParams.PreliminaryReview ? 'Y' : null,
-      priorityExamination: queryParams.PriorityReview ? 'Y' : null,
-      officialDocumentDateStart: queryParams.issueTime?.[0] || null,
-      officialDocumentDateEnd: queryParams.issueTime?.[1] || null,
-      applicationDateStart: queryParams.applicationTime?.[0] || null,
-      applicationDateEnd: queryParams.applicationTime?.[1] || null,
+      preliminaryCase: queryParams.PreliminaryReview ? 'true' : null,
+      priorityExamination: queryParams.PriorityReview ? 'true' : null,
+      officialDocumentDateStart: issueStart || null,
+      officialDocumentDateEnd: issueEnd || null,
+      applicationDateStart: applyStart || null,
+      applicationDateEnd: applyEnd || null,
     }
     const res = await PatentIncomingAPI.getList(params)
     let payload = res?.data !== undefined ? res.data : res
@@ -587,37 +601,42 @@ const handleMoveToNoProcess = async () => {
   }
 }
 
-const handleImportToSystem = () => {
-  if (!ensureSelection()) return
-  ElMessage.success(`已导入系统，共 ${ids.value.length} 条`)
-}
-
-const handleMatchProject = async () => {
+const handleImportToSystem = async () => {
   if (!ensureSelection()) return
   loading.value = true
   try {
-    const res = await PatentIncomingAPI.oneClickMatch({ ids: ids.value })
-    let payload = res?.data !== undefined ? res.data : res
-    let rawList = Array.isArray(payload)
-      ? payload
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : payload?.list ?? payload?.records ?? []
-    if (!Array.isArray(rawList)) rawList = []
+    const res = await PatentIncomingAPI.importProcesses({ ids: ids.value })
+    ElMessage.success(res?.message || `已导入系统，共 ${ids.value.length} 条`)
+    getList()
+  } catch (error) {
+    console.error('导入系统失败:', error)
+    ElMessage.error(error?.message || '导入系统失败')
+  } finally {
+    loading.value = false
+  }
+}
 
-    const list = rawList.map((item, index) =>
-      mapFields({
-        ...normalizeIncomingItem(item),
-        id: item.id != null ? item.id : index + 1,
-      }),
-    )
-
-    total.value = list.length
-    tableData.value = list
-    ElMessage.success(`一键匹配完成，共 ${list.length} 条`)
+const handleMatchProject = async () => {
+  loading.value = true
+  try {
+    // 不传 ids 为全量匹配；传 ids 为定向匹配（当前 UI 无此场景）
+    const params = ids.value && ids.value.length > 0 ? { ids: ids.value } : {}
+    const res = await PatentIncomingAPI.oneClickMatch(params)
+    const data = res?.data ?? res ?? {}
+    const matched = data.matchedCount ?? 0
+    const failed = data.failedCount ?? 0
+    const failedItems = Array.isArray(data.failedItems) ? data.failedItems : []
+    if (failedItems.length > 0) {
+      const codes = failedItems.map((i) => i.caseCode).join('、')
+      ElMessage.warning(`匹配完成，成功 ${matched} 条，失败 ${failed} 条（未匹配到案件：${codes}）`)
+    } else {
+      ElMessage.success(`匹配完成，成功 ${matched} 条${failed > 0 ? `，失败 ${failed} 条` : ''}`)
+    }
+    getList()
   } catch (error) {
     console.error('匹配失败:', error)
-    ElMessage.error('匹配失败')
+    const msg = error?.response?.data?.message ?? error?.message ?? '匹配失败'
+    ElMessage.error(msg)
   } finally {
     loading.value = false
   }
@@ -648,19 +667,16 @@ const handleExportTable = async () => {
 }
 
 const handleUploadReceipt = () => {
-  if (!ensureSelection()) return
   uploadDialogVisible.value = true
   uploadType.value = 'receipt'
 }
 
 const handleUploadCertificate = () => {
-  if (!ensureSelection()) return
   uploadDialogVisible.value = true
   uploadType.value = 'certificate'
 }
 
 const handleUploadNotification = () => {
-  if (!ensureSelection()) return
   uploadDialogVisible.value = true
   uploadType.value = 'notification'
 }
@@ -722,6 +738,7 @@ watch(
 
 onMounted(() => {
   getList()
+  fetchApplyTypeOptions()
 })
 </script>
 

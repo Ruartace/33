@@ -8,10 +8,18 @@ export const TrademarkIncomingAPI = {
       params,
     })
   },
-  oneClickMatch() {
+  getApplyTypeOptions(name) {
+    return request({
+      url: '/apply-type/options',
+      method: 'get',
+      params: name ? { name } : {},
+    })
+  },
+  oneClickMatch(data = {}) {
     return request({
       url: '/trademark-match/one-click-match',
       method: 'post',
+      data,
     })
   },
   /** GET /api/trademark/search/export?ids=1,2 */
@@ -32,6 +40,15 @@ export const TrademarkIncomingAPI = {
       method: 'post',
       data: formData,
       timeout: 120000,
+    })
+  },
+  /** POST /api/trademark-doc/upload，字段：file（zip）、excel（xlsx/xls） */
+  uploadDoc(formData) {
+    return request({
+      url: '/trademark-doc/upload',
+      method: 'post',
+      data: formData,
+      timeout: 180000,
     })
   },
   /** POST /api/trademark-receipt/move-no-need，body: { project_no: string[], ids: (number|string)[] } */
@@ -56,6 +73,14 @@ export const TrademarkIncomingAPI = {
       url: '/trademark/import-processes',
       method: 'post',
       data,
+    })
+  },
+  /** GET /api/user/options 人员选项（支持模糊查询） */
+  getUserOptions(name) {
+    return request({
+      url: '/user/options',
+      method: 'get',
+      params: name ? { name } : {},
     })
   },
 }
