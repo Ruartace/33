@@ -36,7 +36,10 @@ request.interceptors.response.use(
     const res = response.data
     if (res && typeof res === 'object' && 'success' in res && res.success === false) {
       console.error('请求失败:', res.message)
-      return Promise.reject(new Error(res.message || '请求失败'))
+      const error = new Error(res.message || '请求失败')
+      // 保留原始响应体，便于调用方取 details 等失败明细（如导入结果里的失败原因）
+      error.payload = res
+      return Promise.reject(error)
     }
     return res
   },

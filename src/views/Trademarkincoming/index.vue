@@ -47,7 +47,7 @@
                   class="filter-item"
                 >
                   <el-option
-                    v-for="item in statusOptions"
+                    v-for="item in STATUS_FILTER_OPTIONS"
                     :key="item.value"
                     :label="item.label"
                     :value="item.value"
@@ -222,9 +222,13 @@
           <el-button type="primary" @click="handleMoveToNoProcess">
             转入无需处理
           </el-button>
-          <el-button type="primary" @click="handleImportToSystem">
-            导入系统
-          </el-button>
+          <el-tooltip :content="importDisabledTip" placement="top" :disabled="!importDisabled">
+            <span>
+              <el-button type="primary" :disabled="importDisabled" @click="handleImportToSystem">
+                导入系统
+              </el-button>
+            </span>
+          </el-tooltip>
           <el-button type="primary" @click="handleMatchProject">
             匹配项目
           </el-button>
@@ -275,7 +279,19 @@
         <el-table-column label="机构" prop="organization" width="100" align="center" />
         <el-table-column label="客户名称" prop="customerName" min-width="140" align="center" />
         <el-table-column label="技术主导" prop="technicalLead" width="100" align="center" />
-        <el-table-column label="状态" prop="status" width="100" align="center" />
+        <el-table-column label="状态" width="120" align="center">
+          <template #default="scope">
+            <el-tag
+              v-if="scope.row.statusLabel"
+              :type="resolveStatusTagType(scope.row)"
+              size="small"
+              effect="light"
+            >
+              {{ scope.row.statusLabel }}
+            </el-tag>
+            <span v-else>{{ scope.row.status }}</span>
+          </template>
+        </el-table-column>
       </el-table>
       <!-- 分页 -->
       <el-pagination
@@ -443,7 +459,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Search as SearchIcon,
@@ -453,6 +469,16 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { TrademarkIncomingAPI } from '@/api/trademarkincoming'
+import {
+  STATUS_FILTER_OPTIONS,
+  resolveStatusLabel,
+  resolveStatusGroup,
+  resolveStatusTagType,
+  isImportable,
+  buildInternalCodeIssueMessages,
+  extractInternalCodeIssues,
+  extractFailedImportDetails,
+} from '@/utils/incomingStatus'
 
 defineOptions({ name: 'TrademarkIncomingPage' })
 
@@ -460,6 +486,7 @@ const route = useRoute()
 
 const loading = ref(false)
 const ids = ref([])
+const selectedRows = ref([])
 const dataTable = ref(null)
 const total = ref(0)
 const tableData = ref([])
@@ -470,7 +497,8 @@ const queryParams = reactive({
   projectNumber: '',
   applicationNumber: '',
   registrationNumber: '',
-  status: '',
+  // 默认按「未处理」分组过滤（后端 status 为空时也会兜底按未处理过滤，前端显式传更稳妥）
+  status: '未处理',
   documentType: '',
   receiptTime: '',
   projectName: '',
@@ -488,14 +516,6 @@ const documentTypeOptions = [
   { label: '通知书', value: '通知书' },
   { label: '证书', value: '证书' },
   { label: '回执', value: '回执' },
-]
-
-const statusOptions = [
-  // 与后端 TrademarkResponse.status 字段枚举对齐
-  { label: '未处理', value: '未处理' },
-  { label: '匹配成功', value: '匹配成功' },
-  { label: '匹配失败', value: '匹配失败' },
-  { label: '无需处理', value: '无需处理' },
 ]
 
 const analystOptions = ref([])
@@ -586,7 +606,10 @@ const fetchList = async () => {
       businessType: item.businessType,
       technicalLead: item.technicalLead,
       organization: item.agencyCode,
+      // status 保留后端内部状态值，展示用 statusLabel
       status: item.status,
+      statusLabel: resolveStatusLabel(item),
+      statusGroup: resolveStatusGroup(item),
       caseId: item.caseId,
       applicationType: item.applicationType,
       uploadTime: item.uploadTime,
@@ -624,7 +647,7 @@ const handleReset = () => {
   queryParams.projectNumber = ''
   queryParams.applicationNumber = ''
   queryParams.registrationNumber = ''
-  queryParams.status = ''
+  queryParams.status = '未处理'
   queryParams.documentType = ''
   queryParams.receiptTime = ''
   queryParams.projectName = ''
@@ -654,7 +677,18 @@ const handleCurrentChange = (page) => {
 
 const handleSelectionChange = (selection) => {
   ids.value = selection.map((item) => item.id)
+  selectedRows.value = selection
 }
+
+// 只有「已匹配」（内部值「找到唯一项目」）允许导入系统，其它状态后端会直接跳过
+const importableRows = computed(() => selectedRows.value.filter((row) => isImportable(row)))
+const importDisabled = computed(
+  () => selectedRows.value.length > 0 && importableRows.value.length === 0,
+)
+const importDisabledTip = computed(() => {
+  if (!importDisabled.value) return ''
+  return '所选记录中没有「已匹配」状态，无法导入系统，请先完成匹配项目'
+})
 
 const handleRestoreNotImported = async () => {
   if (!ensureSelection()) return
@@ -706,13 +740,42 @@ const handleMoveToNoProcess = async () => {
 
 const handleImportToSystem = async () => {
   if (!ensureSelection()) return
+  // 双保险：只有「已匹配」的记录允许导入系统
+  const importableIds = importableRows.value.map((row) => row.id)
+  if (importableIds.length === 0) {
+    ElMessage.warning('所选记录中没有「已匹配」状态，无法导入系统，请先完成匹配项目')
+    return
+  }
+  if (importableIds.length !== selectedRows.value.length) {
+    ElMessage.warning('所选记录中存在非「已匹配」状态，已仅导入「已匹配」的记录')
+  }
   loading.value = true
   try {
-    const res = await TrademarkIncomingAPI.importProcesses({ ids: ids.value })
-    ElMessage.success(res?.message || `已导入系统，共 ${ids.value.length} 条`)
+    const res = await TrademarkIncomingAPI.importProcesses({ ids: importableIds })
+    const failedDetails = extractFailedImportDetails(res)
+    if (failedDetails.length > 0) {
+      ElMessage.warning({
+        message: `导入完成，但有 ${failedDetails.length} 条未成功：\n${failedDetails.join('\n')}`,
+        duration: 0,
+        showClose: true,
+        customClass: 'el-message-multiline',
+      })
+    } else {
+      ElMessage.success(res?.message || `已导入系统，共 ${importableIds.length} 条`)
+    }
     getList()
   } catch (error) {
-    ElMessage.error(error?.message || '导入系统失败')
+    const failedDetails = extractFailedImportDetails(error?.payload ?? error?.response?.data ?? error)
+    if (failedDetails.length > 0) {
+      ElMessage.warning({
+        message: `导入完成，但有 ${failedDetails.length} 条未成功：\n${failedDetails.join('\n')}`,
+        duration: 0,
+        showClose: true,
+        customClass: 'el-message-multiline',
+      })
+    } else {
+      ElMessage.error(error?.message || '导入系统失败')
+    }
   } finally {
     loading.value = false
   }
@@ -954,15 +1017,18 @@ const submitCertificateUpload = async () => {
     const res = await TrademarkIncomingAPI.uploadDoc(formData)
     const data = res?.data ?? {}
     const msgs = Array.isArray(data.messages) ? data.messages : []
+    // 上传后若通知书没有有效的文件描述配置，后端会返回 internalCodeIssues
+    const issueMsgs = buildInternalCodeIssueMessages(extractInternalCodeIssues(res))
+    const allMsgs = [...msgs, ...issueMsgs]
     const summary =
       `解析 ${data.pdfCount ?? 0} 条 PDF，` +
       `通知书 ${data.noticeCount ?? 0}、证书 ${data.certificateCount ?? 0}，` +
       `入库 ${data.insertedCount ?? 0} 条，` +
       `失败 ${data.failedCount ?? 0} 条`
     if (res?.success) {
-      if (msgs.length > 0) {
+      if (allMsgs.length > 0) {
         ElMessage.warning({
-          message: `${summary}\n${msgs.join('\n')}`,
+          message: `${summary}\n${allMsgs.join('\n')}`,
           duration: 0,
           showClose: true,
           customClass: 'el-message-multiline',
@@ -1002,15 +1068,18 @@ const submitNoticeUpload = async () => {
     const res = await TrademarkIncomingAPI.uploadDoc(formData)
     const data = res?.data ?? {}
     const msgs = Array.isArray(data.messages) ? data.messages : []
+    // 上传后若通知书没有有效的文件描述配置，后端会返回 internalCodeIssues
+    const issueMsgs = buildInternalCodeIssueMessages(extractInternalCodeIssues(res))
+    const allMsgs = [...msgs, ...issueMsgs]
     const summary =
       `解析 ${data.pdfCount ?? 0} 条 PDF，` +
       `通知书 ${data.noticeCount ?? 0}、证书 ${data.certificateCount ?? 0}，` +
       `入库 ${data.insertedCount ?? 0} 条，` +
       `失败 ${data.failedCount ?? 0} 条`
     if (res?.success) {
-      if (msgs.length > 0) {
+      if (allMsgs.length > 0) {
         ElMessage.warning({
-          message: `${summary}\n${msgs.join('\n')}`,
+          message: `${summary}\n${allMsgs.join('\n')}`,
           duration: 0,
           showClose: true,
           customClass: 'el-message-multiline',

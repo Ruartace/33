@@ -47,7 +47,7 @@
                   class="filter-item"
                 >
                   <el-option
-                    v-for="item in statusOptions"
+                    v-for="item in STATUS_FILTER_OPTIONS"
                     :key="item.value"
                     :label="item.label"
                     :value="item.value"
@@ -170,9 +170,13 @@
           <el-button type="primary" @click="handleMoveToNoProcess">
             转入无需处理
           </el-button>
-          <el-button type="primary" @click="handleImportToSystem">
-            导入系统
-          </el-button>
+          <el-tooltip :content="importDisabledTip" placement="top" :disabled="!importDisabled">
+            <span>
+              <el-button type="primary" :disabled="importDisabled" @click="handleImportToSystem">
+                导入系统
+              </el-button>
+            </span>
+          </el-tooltip>
           <el-button type="primary" @click="handleMatchProject">
             匹配项目
           </el-button>
@@ -224,7 +228,19 @@
         <el-table-column label="预审案" prop="preliminaryCase" width="100" align="center" />
         <el-table-column label="机构账号" prop="institutionNumber" width="120" align="center" />
         <el-table-column label="客户名称" prop="customerName" width="120" align="center" />
-        <el-table-column label="状态" prop="status" width="120" align="center" />
+        <el-table-column label="状态" width="120" align="center">
+          <template #default="scope">
+            <el-tag
+              v-if="scope.row.statusLabel"
+              :type="resolveStatusTagType(scope.row)"
+              size="small"
+              effect="light"
+            >
+              {{ scope.row.statusLabel }}
+            </el-tag>
+            <span v-else>{{ scope.row.status }}</span>
+          </template>
+        </el-table-column>
       </el-table>
       <!-- 分页 -->
       <el-pagination
@@ -274,7 +290,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Search as SearchIcon,
@@ -284,6 +300,16 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { PatentIncomingAPI } from '@/api/patentincoming'
+import {
+  STATUS_FILTER_OPTIONS,
+  resolveStatusLabel,
+  resolveStatusGroup,
+  resolveStatusTagType,
+  isImportable,
+  buildInternalCodeIssueMessages,
+  extractInternalCodeIssues,
+  extractFailedImportDetails,
+} from '@/utils/incomingStatus'
 
 defineOptions({ name: 'PatentIncomingPage' })
 
@@ -291,6 +317,7 @@ const route = useRoute()
 
 const loading = ref(false)
 const ids = ref([])
+const selectedRows = ref([])
 const total = ref(0)
 const tableData = ref([])
 const uploadDialogVisible = ref(false)
@@ -307,7 +334,8 @@ const queryParams = reactive({
   projectNo: '',
   institutionNumber: '',
   applicationNumber: '',
-  status: '',
+  // 默认按「未处理」分组过滤（后端 status 为空时也会兜底按未处理过滤，前端显式传更稳妥）
+  status: '未处理',
   issueTime: [],
   applicationTime: [],
   projectName: '',
@@ -347,27 +375,6 @@ const preliminaryCaseOptions = [
   { label: '是', value: 'true' },
   { label: '否', value: 'false' },
 ]
-
-const statusOptions = [
-  { label: '未处理', value: '未处理' },
-  { label: '匹配失败', value: '匹配失败' },
-  { label: '匹配成功', value: '匹配成功' },
-  { label: '已处理', value: '已处理' },
-  { label: '无需处理', value: '无需处理' },
-  { label: '处理中', value: '处理中' },
-]
-
-const statusMap = {
-  未处理: '未处理',
-  匹配失败: '匹配失败',
-  匹配成功: '匹配成功',
-  已处理: '已处理',
-  无需处理: '无需处理',
-  PENDING: '未处理',
-  PROCESSING: '处理中',
-  COMPLETED: '已完成',
-  NO_NEED: '无需处理',
-}
 
 /**
  * 将接口返回（蛇形 / 驼峰、parse-zip 等）规整为表格使用字段
@@ -442,13 +449,17 @@ const normalizeIncomingItem = (item = {}) => {
     customerName: item.customerName ?? item.customer_name ?? '',
     notificationBrief: item.notificationBrief ?? item.notification_brief ?? '',
     status: item.status ?? '',
+    statusLabel: item.statusLabel ?? item.status_label ?? '',
+    statusGroup: item.statusGroup ?? item.status_group ?? '',
     applicationDate: item.applicationDate ?? item.application_date ?? '',
   }
 }
 
 const mapFields = (row) => ({
   ...row,
-  status: statusMap[row.status] ?? row.status ?? '',
+  // status 保留后端内部状态值（转状态接口按内部值比对），展示一律用 statusLabel
+  statusLabel: resolveStatusLabel(row),
+  statusGroup: resolveStatusGroup(row),
   // 优先按后端契约 "true"/"false" 映射；兼容历史数据中的 Y/N、布尔值；其余原样展示
   priorityExamination:
     row.priorityExamination === 'true' || row.priorityExamination === true || row.priorityExamination === 'Y'
@@ -541,7 +552,7 @@ const handleReset = () => {
   queryParams.projectNo = ''
   queryParams.institutionNumber = ''
   queryParams.applicationNumber = ''
-  queryParams.status = ''
+  queryParams.status = '未处理'
   queryParams.issueTime = []
   queryParams.applicationTime = []
   queryParams.projectName = ''
@@ -565,7 +576,18 @@ const handleCurrentChange = (page) => {
 
 const handleSelectionChange = (selection) => {
   ids.value = selection.map((item) => item.id)
+  selectedRows.value = selection
 }
+
+// 只有「已匹配」（内部值「找到唯一项目」）允许导入系统，其它状态后端会直接跳过
+const importableRows = computed(() => selectedRows.value.filter((row) => isImportable(row)))
+const importDisabled = computed(
+  () => selectedRows.value.length > 0 && importableRows.value.length === 0,
+)
+const importDisabledTip = computed(() => {
+  if (!importDisabled.value) return ''
+  return '所选记录中没有「已匹配」状态，无法导入系统，请先完成匹配项目'
+})
 
 const handleRestoreNotImported = async () => {
   if (!ensureSelection()) return
@@ -603,14 +625,43 @@ const handleMoveToNoProcess = async () => {
 
 const handleImportToSystem = async () => {
   if (!ensureSelection()) return
+  // 双保险：只有「已匹配」的记录允许导入系统
+  const importableIds = importableRows.value.map((row) => row.id)
+  if (importableIds.length === 0) {
+    ElMessage.warning('所选记录中没有「已匹配」状态，无法导入系统，请先完成匹配项目')
+    return
+  }
+  if (importableIds.length !== selectedRows.value.length) {
+    ElMessage.warning('所选记录中存在非「已匹配」状态，已仅导入「已匹配」的记录')
+  }
   loading.value = true
   try {
-    const res = await PatentIncomingAPI.importProcesses({ ids: ids.value })
-    ElMessage.success(res?.message || `已导入系统，共 ${ids.value.length} 条`)
+    const res = await PatentIncomingAPI.importProcesses({ ids: importableIds })
+    const failedDetails = extractFailedImportDetails(res)
+    if (failedDetails.length > 0) {
+      ElMessage.warning({
+        message: `导入完成，但有 ${failedDetails.length} 条未成功：\n${failedDetails.join('\n')}`,
+        duration: 0,
+        showClose: true,
+        customClass: 'el-message-multiline',
+      })
+    } else {
+      ElMessage.success(res?.message || `已导入系统，共 ${importableIds.length} 条`)
+    }
     getList()
   } catch (error) {
     console.error('导入系统失败:', error)
-    ElMessage.error(error?.message || '导入系统失败')
+    const failedDetails = extractFailedImportDetails(error?.payload ?? error?.response?.data ?? error)
+    if (failedDetails.length > 0) {
+      ElMessage.warning({
+        message: `导入完成，但有 ${failedDetails.length} 条未成功：\n${failedDetails.join('\n')}`,
+        duration: 0,
+        showClose: true,
+        customClass: 'el-message-multiline',
+      })
+    } else {
+      ElMessage.error(error?.message || '导入系统失败')
+    }
   } finally {
     loading.value = false
   }
@@ -707,18 +758,30 @@ const handleConfirmUpload = async () => {
     formData.append('file', uploadForm.file)
     
     let message = '上传成功'
+    let res = null
     if (uploadType.value === 'certificate') {
-      await PatentIncomingAPI.parseZipRuidDao(formData)
+      res = await PatentIncomingAPI.parseZipRuidDao(formData)
       message = '证书上传成功'
     } else if (uploadType.value === 'notification') {
-      await PatentIncomingAPI.parseZip(formData)
+      res = await PatentIncomingAPI.parseZip(formData)
       message = '通知上传成功'
     } else if (uploadType.value === 'receipt') {
       await PatentIncomingAPI.parseListXml(formData)
       message = '回执上传成功'
     }
-    
-    ElMessage.success(message)
+
+    // 上传后若通知书没有有效的文件描述配置，后端会返回 internalCodeIssues
+    const issueMessages = buildInternalCodeIssueMessages(extractInternalCodeIssues(res))
+    if (issueMessages.length > 0) {
+      ElMessage.warning({
+        message: `${message}\n${issueMessages.join('\n')}`,
+        duration: 0,
+        showClose: true,
+        customClass: 'el-message-multiline',
+      })
+    } else {
+      ElMessage.success(message)
+    }
     uploadDialogVisible.value = false
     getList()
   } catch (error) {
@@ -829,5 +892,10 @@ onMounted(() => {
 .filter-item :deep(.el-select .el-input__wrapper) {
   height: auto;
   line-height: normal;
+}
+
+:deep(.el-message-multiline) {
+  white-space: pre-line;
+  max-width: 60vw;
 }
 </style>
