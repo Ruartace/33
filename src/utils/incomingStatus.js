@@ -201,3 +201,22 @@ export const extractFailedImportDetails = (res) => {
     })
     .map((item) => item?.remark || item?.message || '导入失败')
 }
+
+/**
+ * 从导入接口响应里取出所有条目的 remark（不仅仅是失败的，成功/跳过/失败都取）。
+ * 后端对每个导入条目都会返回 remark 说明处理结果（如「已导入」、「跳过」、「失败原因」）。
+ * 统一展示让用户知道每条的去向。
+ */
+export const extractAllImportRemarks = (res) => {
+  const details =
+    res?.data?.details ??
+    res?.details ??
+    res?.data?.data?.details ??
+    res?.payload?.data?.details ??
+    res?.payload?.details ??
+    []
+  const list = Array.isArray(details) ? details : []
+  return list
+    .map((item) => item?.remark || item?.message || '')
+    .filter(Boolean)
+}

@@ -469,15 +469,15 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { TrademarkIncomingAPI } from '@/api/trademarkincoming'
+import { getId } from '@/utils/idStore'
 import {
   STATUS_FILTER_OPTIONS,
-  resolveStatusLabel,
-  resolveStatusGroup,
   resolveStatusTagType,
   isImportable,
   buildInternalCodeIssueMessages,
   extractInternalCodeIssues,
   extractFailedImportDetails,
+  extractAllImportRemarks,
 } from '@/utils/incomingStatus'
 
 defineOptions({ name: 'TrademarkIncomingPage' })
@@ -606,10 +606,10 @@ const fetchList = async () => {
       businessType: item.businessType,
       technicalLead: item.technicalLead,
       organization: item.agencyCode,
-      // status 保留后端内部状态值，展示用 statusLabel
+      // statusLabel / statusGroup 直接使用后端接口返回的值，不再前端二次转换
       status: item.status,
-      statusLabel: resolveStatusLabel(item),
-      statusGroup: resolveStatusGroup(item),
+      statusLabel: item.statusLabel ?? item.status_label ?? item.statusLabel,
+      statusGroup: item.statusGroup ?? item.status_group ?? item.statusGroup,
       caseId: item.caseId,
       applicationType: item.applicationType,
       uploadTime: item.uploadTime,
@@ -752,10 +752,20 @@ const handleImportToSystem = async () => {
   loading.value = true
   try {
     const res = await TrademarkIncomingAPI.importProcesses({ ids: importableIds })
+    // 展示后端返回的所有 remark（成功/跳过/失败每条都有说明）
+    const allRemarks = extractAllImportRemarks(res)
     const failedDetails = extractFailedImportDetails(res)
-    if (failedDetails.length > 0) {
+
+    if (failedDetails.length > 0 && allRemarks.length > 0) {
       ElMessage.warning({
-        message: `导入完成，但有 ${failedDetails.length} 条未成功：\n${failedDetails.join('\n')}`,
+        message: `导入完成，共 ${allRemarks.length} 条，其中 ${failedDetails.length} 条未成功：\n${allRemarks.join('\n')}`,
+        duration: 0,
+        showClose: true,
+        customClass: 'el-message-multiline',
+      })
+    } else if (allRemarks.length > 0) {
+      ElMessage.success({
+        message: `导入完成，共 ${allRemarks.length} 条：\n${allRemarks.join('\n')}`,
         duration: 0,
         showClose: true,
         customClass: 'el-message-multiline',
@@ -765,10 +775,11 @@ const handleImportToSystem = async () => {
     }
     getList()
   } catch (error) {
+    const allRemarks = extractAllImportRemarks(error?.payload ?? error?.response?.data ?? error)
     const failedDetails = extractFailedImportDetails(error?.payload ?? error?.response?.data ?? error)
-    if (failedDetails.length > 0) {
+    if (failedDetails.length > 0 || allRemarks.length > 0) {
       ElMessage.warning({
-        message: `导入完成，但有 ${failedDetails.length} 条未成功：\n${failedDetails.join('\n')}`,
+        message: `导入完成：\n${(allRemarks.length ? allRemarks : failedDetails).join('\n')}`,
         duration: 0,
         showClose: true,
         customClass: 'el-message-multiline',
@@ -986,6 +997,7 @@ const submitReceiptUpload = async () => {
     const formData = new FormData()
     formData.append('file', zip, zip.name)
     formData.append('excel', excel, excel.name)
+    formData.append('user_id', getId(route.query.userId))
     const res = await TrademarkIncomingAPI.uploadReceipt(formData)
     ElMessage.success(res?.message || '上传成功')
     receiptDialogVisible.value = false
@@ -1013,7 +1025,7 @@ const submitCertificateUpload = async () => {
     const formData = new FormData()
     formData.append('file', zip, zip.name)
     formData.append('excel', excel, excel.name)
-    formData.append('user_id', localStorage.getItem('userId') || '')
+    formData.append('user_id', getId(route.query.userId))
     const res = await TrademarkIncomingAPI.uploadDoc(formData)
     const data = res?.data ?? {}
     const msgs = Array.isArray(data.messages) ? data.messages : []
@@ -1064,7 +1076,7 @@ const submitNoticeUpload = async () => {
     const formData = new FormData()
     formData.append('file', zip, zip.name)
     formData.append('excel', excel, excel.name)
-    formData.append('user_id', localStorage.getItem('userId') || '')
+    formData.append('user_id', getId(route.query.userId))
     const res = await TrademarkIncomingAPI.uploadDoc(formData)
     const data = res?.data ?? {}
     const msgs = Array.isArray(data.messages) ? data.messages : []

@@ -300,15 +300,15 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { PatentIncomingAPI } from '@/api/patentincoming'
+import { getId } from '@/utils/idStore'
 import {
   STATUS_FILTER_OPTIONS,
-  resolveStatusLabel,
-  resolveStatusGroup,
   resolveStatusTagType,
   isImportable,
   buildInternalCodeIssueMessages,
   extractInternalCodeIssues,
   extractFailedImportDetails,
+  extractAllImportRemarks,
 } from '@/utils/incomingStatus'
 
 defineOptions({ name: 'PatentIncomingPage' })
@@ -457,9 +457,7 @@ const normalizeIncomingItem = (item = {}) => {
 
 const mapFields = (row) => ({
   ...row,
-  // status 保留后端内部状态值（转状态接口按内部值比对），展示一律用 statusLabel
-  statusLabel: resolveStatusLabel(row),
-  statusGroup: resolveStatusGroup(row),
+  // statusLabel / statusGroup 直接使用后端接口返回的值，不再前端二次转换
   // 优先按后端契约 "true"/"false" 映射；兼容历史数据中的 Y/N、布尔值；其余原样展示
   priorityExamination:
     row.priorityExamination === 'true' || row.priorityExamination === true || row.priorityExamination === 'Y'
@@ -637,10 +635,20 @@ const handleImportToSystem = async () => {
   loading.value = true
   try {
     const res = await PatentIncomingAPI.importProcesses({ ids: importableIds })
+    // 展示后端返回的所有 remark（成功/跳过/失败每条都有说明）
+    const allRemarks = extractAllImportRemarks(res)
     const failedDetails = extractFailedImportDetails(res)
-    if (failedDetails.length > 0) {
+
+    if (failedDetails.length > 0 && allRemarks.length > 0) {
       ElMessage.warning({
-        message: `导入完成，但有 ${failedDetails.length} 条未成功：\n${failedDetails.join('\n')}`,
+        message: `导入完成，共 ${allRemarks.length} 条，其中 ${failedDetails.length} 条未成功：\n${allRemarks.join('\n')}`,
+        duration: 0,
+        showClose: true,
+        customClass: 'el-message-multiline',
+      })
+    } else if (allRemarks.length > 0) {
+      ElMessage.success({
+        message: `导入完成，共 ${allRemarks.length} 条：\n${allRemarks.join('\n')}`,
         duration: 0,
         showClose: true,
         customClass: 'el-message-multiline',
@@ -651,10 +659,11 @@ const handleImportToSystem = async () => {
     getList()
   } catch (error) {
     console.error('导入系统失败:', error)
+    const allRemarks = extractAllImportRemarks(error?.payload ?? error?.response?.data ?? error)
     const failedDetails = extractFailedImportDetails(error?.payload ?? error?.response?.data ?? error)
-    if (failedDetails.length > 0) {
+    if (failedDetails.length > 0 || allRemarks.length > 0) {
       ElMessage.warning({
-        message: `导入完成，但有 ${failedDetails.length} 条未成功：\n${failedDetails.join('\n')}`,
+        message: `导入完成：\n${(allRemarks.length ? allRemarks : failedDetails).join('\n')}`,
         duration: 0,
         showClose: true,
         customClass: 'el-message-multiline',
@@ -756,6 +765,7 @@ const handleConfirmUpload = async () => {
   try {
     const formData = new FormData()
     formData.append('file', uploadForm.file)
+    formData.append('user_id', getId(route.query.userId))
     
     let message = '上传成功'
     let res = null
