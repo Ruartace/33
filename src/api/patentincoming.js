@@ -15,12 +15,12 @@ export const PatentIncomingAPI = {
       params: name ? { name } : {},
     })
   },
-  exportExcel(ids) {
+  exportExcel(params = {}) {
     return request({
       url: '/ruidao/realtime-search/export',
       method: 'get',
       responseType: 'blob',
-      params: { ids },
+      params,
     })
   },
   parseZip(data) {

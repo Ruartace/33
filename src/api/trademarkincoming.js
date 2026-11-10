@@ -22,13 +22,14 @@ export const TrademarkIncomingAPI = {
       data,
     })
   },
-  /** GET /api/trademark/search/export?ids=1,2 */
-  exportList(ids) {
-    const idParam = Array.isArray(ids) ? ids.join(',') : String(ids)
+  /** GET /api/trademark/search/export。勾选时 ids 逗号拼接；未勾选时传当前筛选，不带分页。 */
+  exportList(params = {}) {
+    const query = { ...params }
+    if (Array.isArray(query.ids)) query.ids = query.ids.join(',')
     return request({
       url: '/trademark/search/export',
       method: 'get',
-      params: { ids: idParam },
+      params: query,
       responseType: 'blob',
       timeout: 120000,
     })

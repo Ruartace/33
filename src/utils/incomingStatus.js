@@ -117,38 +117,79 @@ export const resolveStatusTagType = (rowOrLabel) => {
 export const isImportable = (row = {}) => resolveStatusLabel(row) === '已匹配'
 
 /**
+ * 优审 / 预审列展示。
+ * 接口现返回「是」/「否」，空值为 null；旧数据里的 true/false、Y/N、1/0 仍按原意显示。
+ */
+export const formatReviewFlag = (value) => {
+  if (value === null || value === undefined || value === '') return ''
+  if (value === '是' || value === '否') return value
+  if (value === true || value === 'true' || value === 'Y' || value === 1 || value === '1') return '是'
+  if (value === false || value === 'false' || value === 'N' || value === 0 || value === '0') return '否'
+  return String(value)
+}
+
+const ISSUE_CODE_KEYS = [
+  'notificationCode',
+  'notification_code',
+  'notificationNo',
+  'notification_no',
+  'noticeCode',
+  'notice_code',
+  'number',
+  'code',
+]
+
+const readIssueCode = (issue, reason) => {
+  for (const key of ISSUE_CODE_KEYS) {
+    const value = issue?.[key]
+    if (value !== null && value !== undefined && String(value).trim() !== '') {
+      return String(value).trim()
+    }
+  }
+  return extractNoticeCodeFromReason(reason)
+}
+
+const readCandidates = (issue) =>
+  (Array.isArray(issue?.candidates) ? issue.candidates : []).filter(
+    (item) => item !== null && item !== undefined && item !== '',
+  )
+
+/** message 缺失时，按 reason 生成提示。status 内部值「找不到内部代码」展示为「缺文件描述」。 */
+const buildInternalCodeIssueFallback = (issue = {}) => {
+  const reason = typeof issue.reason === 'string' ? issue.reason.trim() : ''
+  const code = readIssueCode(issue, reason)
+  const prefix = code ? `通知书编号 ${code}：` : ''
+  const candidates = readCandidates(issue)
+
+  if (reason === '文件描述已失效') {
+    return `${prefix}文件描述已失效，请到「文件描述设置」中启用，不要新建`
+  }
+  if (reason === '不是唯一') {
+    const extra = candidates.length ? `（候选内部代码：${candidates.join('、')}）` : ''
+    return `${prefix}内部代码不唯一${extra}`
+  }
+  if (reason === '找不到' || issue.status === '找不到内部代码') {
+    return `${prefix}缺文件描述`
+  }
+  if (reason) return `${prefix}${reason}`
+  const label = resolveStatusLabel({ status: issue.status })
+  if (label) return `${prefix}${label}`
+  return prefix.replace(/：$/, '')
+}
+
+/**
  * 上传响应里的 internalCodeIssues -> 提示文案。
- * 后端给的是 status / reason / candidates，其中 status 仍是内部值
- * （如「找不到内部代码」），展示要换成中文标签「缺文件描述」。
+ * 后端 message 已写好，直接展示。没有 message 时再按 reason 兜底。
  */
 export const buildInternalCodeIssueMessages = (issues) => {
   const list = Array.isArray(issues) ? issues : []
-  return list.map((issue) => {
-    const reason = issue?.reason ?? issue?.message ?? ''
-    const code =
-      issue?.notificationCode ??
-      issue?.notification_code ??
-      issue?.notificationNo ??
-      issue?.notification_no ??
-      issue?.noticeCode ??
-      issue?.notice_code ??
-      issue?.number ??
-      issue?.code ??
-      // 通知书编号可能只写在 reason 里
-      extractNoticeCodeFromReason(reason) ??
-      ''
-    const label = resolveStatusLabel({ status: issue?.status })
-    const candidates = (Array.isArray(issue?.candidates) ? issue.candidates : []).filter(
-      (c) => c !== null && c !== undefined && c !== '',
-    )
-    const base =
-      `通知书编号 ${code || '未知'} 没有有效的文件描述配置，` +
-      `已置为${label || '缺文件描述'}，请先在「文件描述设置」中配置后再匹配`
-    const extras = []
-    if (candidates.length > 0) extras.push(`候选内部代码：${candidates.join('、')}`)
-    if (reason && !code) extras.push(reason)
-    return extras.length > 0 ? `${base}（${extras.join('；')}）` : base
-  })
+  return list
+    .map((issue) => {
+      const message = typeof issue?.message === 'string' ? issue.message.trim() : ''
+      if (message) return message
+      return buildInternalCodeIssueFallback(issue ?? {})
+    })
+    .filter(Boolean)
 }
 
 /** 从 reason 文案里抠出通知书编号，如「通知书编号=20261101」 */

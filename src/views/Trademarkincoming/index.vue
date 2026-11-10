@@ -469,6 +469,7 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { TrademarkIncomingAPI } from '@/api/trademarkincoming'
+import { readBlobErrorMessage, readErrorMessage } from '@/utils/apiError'
 import { getId } from '@/utils/idStore'
 import {
   STATUS_FILTER_OPTIONS,
@@ -562,29 +563,35 @@ const ensureSelection = () => {
   return true
 }
 
+const buildListQuery = () => {
+  const receiptTime = queryParams.receiptTime
+  const uploadTime = queryParams.uploadTime
+  return {
+    projectNumber: queryParams.projectNumber || null,
+    applicationNo: queryParams.applicationNumber || null,
+    registrationNumber: queryParams.registrationNumber || null,
+    projectName: queryParams.projectName || null,
+    customerName: queryParams.customerName || null,
+    status: queryParams.status || null,
+    documentType: queryParams.documentType || null,
+    technicalLead: queryParams.technicalLead || null,
+    notificationName: queryParams.notificationName || null,
+    applicationType: queryParams.applicationType || null,
+    organizationAccount: queryParams.organizationAccount || null,
+    analystUserId: queryParams.analystUserId || null,
+    receiveDateStart: Array.isArray(receiptTime) ? receiptTime[0] || null : null,
+    receiveDateEnd: Array.isArray(receiptTime) ? receiptTime[1] || null : null,
+    uploadTimeStart: Array.isArray(uploadTime) ? uploadTime[0] || null : null,
+    uploadTimeEnd: Array.isArray(uploadTime) ? uploadTime[1] || null : null,
+  }
+}
+
 // 真正发起请求的函数：服务端分页，每次都按 pageNum/pageSize 请求后端
 const fetchList = async () => {
   loading.value = true
   try {
-    const receiptTime = queryParams.receiptTime
-    const uploadTime = queryParams.uploadTime
     const params = {
-      projectNumber: queryParams.projectNumber || null,
-      applicationNo: queryParams.applicationNumber || null,
-      registrationNumber: queryParams.registrationNumber || null,
-      projectName: queryParams.projectName || null,
-      customerName: queryParams.customerName || null,
-      status: queryParams.status || null,
-      documentType: queryParams.documentType || null,
-      technicalLead: queryParams.technicalLead || null,
-      notificationName: queryParams.notificationName || null,
-      applicationType: queryParams.applicationType || null,
-      organizationAccount: queryParams.organizationAccount || null,
-      analystUserId: queryParams.analystUserId || null,
-      receiveDateStart: Array.isArray(receiptTime) ? receiptTime[0] : null,
-      receiveDateEnd: Array.isArray(receiptTime) ? receiptTime[1] : null,
-      uploadTimeStart: Array.isArray(uploadTime) ? uploadTime[0] : null,
-      uploadTimeEnd: Array.isArray(uploadTime) ? uploadTime[1] : null,
+      ...buildListQuery(),
       pageNum: queryParams.pageNum,
       pageSize: queryParams.pageSize,
     }
@@ -623,7 +630,7 @@ const fetchList = async () => {
         : tableData.value.length
   } catch (error) {
     console.error('获取数据失败:', error)
-    ElMessage.error('获取数据失败')
+    ElMessage.error(readErrorMessage(error, '获取数据失败'))
   } finally {
     loading.value = false
   }
@@ -871,22 +878,14 @@ function parseFilenameFromContentDisposition(disposition) {
 }
 
 const handleExportTable = async () => {
-  if (!ensureSelection()) return
   loading.value = true
   try {
-    const response = await TrademarkIncomingAPI.exportList(ids.value)
+    const params = ids.value?.length ? { ids: ids.value } : buildListQuery()
+    const response = await TrademarkIncomingAPI.exportList(params)
     const blob = response.data
     const ctype = (response.headers['content-type'] || '').toLowerCase()
-    if (ctype.includes('application/json')) {
-      const text = await blob.text()
-      let msg = '导出失败'
-      try {
-        const j = JSON.parse(text)
-        msg = j.message || j.msg || msg
-      } catch {
-        /* ignore */
-      }
-      ElMessage.error(msg)
+    if (ctype.includes('application/json') || ctype.includes('text/json')) {
+      ElMessage.error(await readBlobErrorMessage(blob, '导出失败'))
       return
     }
     let filename = parseFilenameFromContentDisposition(
@@ -905,16 +904,10 @@ const handleExportTable = async () => {
     ElMessage.success('导出成功')
   } catch (error) {
     const data = error?.response?.data
-    if (data instanceof Blob) {
-      try {
-        const text = await data.text()
-        const j = JSON.parse(text)
-        ElMessage.error(j.message || j.msg || '导出失败')
-      } catch {
-        ElMessage.error(error?.message || '导出失败')
-      }
+    if (typeof Blob !== 'undefined' && data instanceof Blob) {
+      ElMessage.error(await readBlobErrorMessage(data, '导出失败'))
     } else {
-      ElMessage.error(error?.message || '导出失败')
+      ElMessage.error(readErrorMessage(error, '导出失败'))
     }
   } finally {
     loading.value = false

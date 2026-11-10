@@ -300,11 +300,13 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { PatentIncomingAPI } from '@/api/patentincoming'
+import { readBlobErrorMessage, readErrorMessage } from '@/utils/apiError'
 import { getId } from '@/utils/idStore'
 import {
   STATUS_FILTER_OPTIONS,
   resolveStatusTagType,
   isImportable,
+  formatReviewFlag,
   buildInternalCodeIssueMessages,
   extractInternalCodeIssues,
   extractFailedImportDetails,
@@ -361,20 +363,6 @@ const fetchApplyTypeOptions = async () => {
     applicationTypeOptions.value = []
   }
 }
-
-const priorityExaminationOptions = [
-  // 后端契约：priorityExamination 取值为字符串 "true"/"false"
-  // 页面用 el-checkbox 直接控制 queryParams.PriorityReview（boolean），
-  // 提交时映射为 'true' / null。保留空数组防止有人改回下拉时漏配。
-  { label: '是', value: 'true' },
-  { label: '否', value: 'false' },
-]
-
-const preliminaryCaseOptions = [
-  // 同上：preliminaryCase 取值为字符串 "true"/"false"
-  { label: '是', value: 'true' },
-  { label: '否', value: 'false' },
-]
 
 /**
  * 将接口返回（蛇形 / 驼峰、parse-zip 等）规整为表格使用字段
@@ -458,23 +446,8 @@ const normalizeIncomingItem = (item = {}) => {
 const mapFields = (row) => ({
   ...row,
   // statusLabel / statusGroup 直接使用后端接口返回的值，不再前端二次转换
-  // 优先按后端契约 "true"/"false" 映射；兼容历史数据中的 Y/N、布尔值；其余原样展示
-  priorityExamination:
-    row.priorityExamination === 'true' || row.priorityExamination === true || row.priorityExamination === 'Y'
-      ? '是'
-      : row.priorityExamination === 'false' ||
-          row.priorityExamination === false ||
-          row.priorityExamination === 'N'
-        ? '否'
-        : (row.priorityExamination ?? ''),
-  preliminaryCase:
-    row.preliminaryCase === 'true' || row.preliminaryCase === true || row.preliminaryCase === 'Y'
-      ? '是'
-      : row.preliminaryCase === 'false' ||
-          row.preliminaryCase === false ||
-          row.preliminaryCase === 'N'
-        ? '否'
-        : (row.preliminaryCase ?? ''),
+  priorityExamination: formatReviewFlag(row.priorityExamination),
+  preliminaryCase: formatReviewFlag(row.preliminaryCase),
 })
 
 const ensureSelection = () => {
@@ -485,28 +458,32 @@ const ensureSelection = () => {
   return true
 }
 
+const buildListQuery = () => {
+  // 日期区间拆成 Start/End，且空值用 null 过滤（避免发送空字符串导致后端判定为错误格式）
+  const [issueStart, issueEnd] = queryParams.issueTime || []
+  const [applyStart, applyEnd] = queryParams.applicationTime || []
+  return {
+    caseCode: queryParams.projectNo || null,
+    institutionNumber: queryParams.institutionNumber || null,
+    applicationNo: queryParams.applicationNumber || null,
+    caseName: queryParams.projectName || null,
+    customerName: queryParams.customerName || null,
+    notificationName: queryParams.notificationName || null,
+    applicationType: queryParams.applicationType || null,
+    status: queryParams.status || null,
+    preliminaryCase: queryParams.PreliminaryReview ? 'true' : null,
+    priorityExamination: queryParams.PriorityReview ? 'true' : null,
+    officialDocumentDateStart: issueStart || null,
+    officialDocumentDateEnd: issueEnd || null,
+    applicationDateStart: applyStart || null,
+    applicationDateEnd: applyEnd || null,
+  }
+}
+
 const getList = async () => {
   loading.value = true
   try {
-    // 日期区间拆成 Start/End，且空值用 null 过滤（避免发送空字符串导致后端判定为错误格式）
-    const [issueStart, issueEnd] = queryParams.issueTime || []
-    const [applyStart, applyEnd] = queryParams.applicationTime || []
-    const params = {
-      caseCode: queryParams.projectNo || null,
-      institutionNumber: queryParams.institutionNumber || null,
-      applicationNo: queryParams.applicationNumber || null,
-      caseName: queryParams.projectName || null,
-      customerName: queryParams.customerName || null,
-      notificationName: queryParams.notificationName || null,
-      applicationType: queryParams.applicationType || null,
-      status: queryParams.status || null,
-      preliminaryCase: queryParams.PreliminaryReview ? 'true' : null,
-      priorityExamination: queryParams.PriorityReview ? 'true' : null,
-      officialDocumentDateStart: issueStart || null,
-      officialDocumentDateEnd: issueEnd || null,
-      applicationDateStart: applyStart || null,
-      applicationDateEnd: applyEnd || null,
-    }
+    const params = buildListQuery()
     const res = await PatentIncomingAPI.getList(params)
     let payload = res?.data !== undefined ? res.data : res
     let rawList = Array.isArray(payload)
@@ -527,7 +504,7 @@ const getList = async () => {
     tableData.value = list.slice(start, end)
   } catch (error) {
     console.error('获取列表失败:', error)
-    ElMessage.error('获取列表失败')
+    ElMessage.error(readErrorMessage(error, '获取列表失败'))
     tableData.value = []
     total.value = 0
   } finally {
@@ -742,11 +719,16 @@ const handleMatchProject = async () => {
 }
 
 const handleExportTable = async () => {
-  if (!ensureSelection()) return
   loading.value = true
   try {
-    const res = await PatentIncomingAPI.exportExcel(ids.value)
+    const params = ids.value?.length ? { ids: ids.value } : buildListQuery()
+    const res = await PatentIncomingAPI.exportExcel(params)
     const blob = res.data
+    const ctype = String(res.headers?.['content-type'] || '').toLowerCase()
+    if (ctype.includes('application/json') || ctype.includes('text/json')) {
+      ElMessage.error(await readBlobErrorMessage(blob, '导出失败'))
+      return
+    }
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -759,7 +741,12 @@ const handleExportTable = async () => {
     ElMessage.success('导出成功')
   } catch (error) {
     console.error('导出失败:', error)
-    ElMessage.error('导出失败')
+    const data = error?.response?.data
+    if (typeof Blob !== 'undefined' && data instanceof Blob) {
+      ElMessage.error(await readBlobErrorMessage(data, '导出失败'))
+    } else {
+      ElMessage.error(readErrorMessage(error, '导出失败'))
+    }
   } finally {
     loading.value = false
   }
