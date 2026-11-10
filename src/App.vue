@@ -19,7 +19,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <el-container style="height: 97vh">
+  <el-container class="app-shell">
     <el-aside
       width="200px"
       style="
@@ -90,7 +90,7 @@ onMounted(() => {
       </div>
     </el-aside>
 
-    <el-container>
+    <el-container class="app-body">
       <el-header
         style="
           border-bottom: 1px solid #eee;
@@ -101,7 +101,7 @@ onMounted(() => {
       >
         来文工作台
       </el-header>
-      <el-main>
+      <el-main class="app-main">
         <router-view />
       </el-main>
     </el-container>
@@ -109,10 +109,24 @@ onMounted(() => {
 </template>
 
 <style scoped>
-* {
-  margin: 0;
-  padding: 0;
+.app-shell {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #e7eefc;
 }
+
+.app-body {
+  height: 100%;
+  min-width: 0;
+  background-color: #e7eefc;
+}
+
+.app-main {
+  background-color: #e7eefc;
+  padding: 16px;
+}
+
 .aside-title {
   padding: 16px;
   font-weight: 600;
