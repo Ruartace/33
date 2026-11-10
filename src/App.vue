@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { initIdFromUrl } from '@/utils/idStore'
 import {
   CircleCheck,
   Document,
@@ -11,17 +12,9 @@ import {
 
 const route = useRoute()
 
-// 从 URL 中提取 userId 并存入 localStorage
+// 组件层三重保险：再兜底固化一次
 onMounted(() => {
-  const urlParams = new URLSearchParams(window.location.search)
-  const userId = urlParams.get('userId')
-  if (userId) {
-    localStorage.setItem('userId', userId)
-    // 移除 URL 中的 userId 参数
-    urlParams.delete('userId')
-    const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '')
-    window.history.replaceState({}, '', newUrl)
-  }
+  initIdFromUrl()
 })
 </script>
 
