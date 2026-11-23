@@ -214,7 +214,18 @@
             {{ scope.$index + 1 }}
           </template>
         </el-table-column>
-        <el-table-column label="项目编号" prop="caseCode" width="150" align="center" />
+        <el-table-column label="项目编号" min-width="160" align="center">
+          <template #default="scope">
+            <div>{{ scope.row.caseCode }}</div>
+            <div
+              v-if="showOfficialCaseCode(scope.row)"
+              class="original-case-code"
+              :title="`官方：${scope.row.originalCaseCode}`"
+            >
+              官方：{{ scope.row.originalCaseCode }}
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="申请号" prop="applicationNo" width="150" align="center" />
         <el-table-column label="项目名称" prop="caseName" min-width="200" align="center" />
         <el-table-column label="来文类型" prop="incomingDocType" width="120" align="center" />
@@ -228,17 +239,16 @@
         <el-table-column label="预审案" prop="preliminaryCase" width="100" align="center" />
         <el-table-column label="机构账号" prop="institutionNumber" width="120" align="center" />
         <el-table-column label="客户名称" prop="customerName" width="120" align="center" />
-        <el-table-column label="状态" width="120" align="center">
+        <el-table-column label="状态" width="140" align="center">
           <template #default="scope">
             <el-tag
-              v-if="scope.row.statusLabel"
-              :type="resolveStatusTagType(scope.row)"
+              v-if="resolveStatusLabel(scope.row)"
+              :type="resolveStatusTagType(scope.row) || undefined"
               size="small"
               effect="light"
             >
-              {{ scope.row.statusLabel }}
+              {{ resolveStatusLabel(scope.row) }}
             </el-tag>
-            <span v-else>{{ scope.row.status }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -286,6 +296,12 @@
         <el-button type="primary" :loading="uploadLoading" @click="handleConfirmUpload">确认上传</el-button>
       </template>
     </el-dialog>
+
+    <ImportResultDialog
+      v-model="importResultVisible"
+      :summary="importResultSummary"
+      :rows="importResultRows"
+    />
   </div>
 </template>
 
@@ -310,8 +326,10 @@ import {
   buildInternalCodeIssueMessages,
   extractInternalCodeIssues,
   extractFailedImportDetails,
-  extractAllImportRemarks,
+  buildImportResultRows,
+  resolveStatusLabel,
 } from '@/utils/incomingStatus'
+import ImportResultDialog from '@/components/ImportResultDialog.vue'
 
 defineOptions({ name: 'PatentIncomingPage' })
 
@@ -435,6 +453,7 @@ const normalizeIncomingItem = (item = {}) => {
       item.organization_account ??
       '',
     customerName: item.customerName ?? item.customer_name ?? '',
+    originalCaseCode: item.originalCaseCode ?? item.original_case_code ?? '',
     notificationBrief: item.notificationBrief ?? item.notification_brief ?? '',
     status: item.status ?? '',
     statusLabel: item.statusLabel ?? item.status_label ?? '',
@@ -449,6 +468,12 @@ const mapFields = (row) => ({
   priorityExamination: formatReviewFlag(row.priorityExamination),
   preliminaryCase: formatReviewFlag(row.preliminaryCase),
 })
+
+const showOfficialCaseCode = (row) => {
+  const official = String(row?.originalCaseCode ?? '').trim()
+  const current = String(row?.caseCode ?? '').trim()
+  return Boolean(official) && official !== current
+}
 
 const ensureSelection = () => {
   if (!ids.value || ids.value.length === 0) {
@@ -556,9 +581,7 @@ const handleSelectionChange = (selection) => {
 
 // 只有「已匹配」（内部值「找到唯一项目」）允许导入系统，其它状态后端会直接跳过
 const importableRows = computed(() => selectedRows.value.filter((row) => isImportable(row)))
-const importDisabled = computed(
-  () => selectedRows.value.length > 0 && importableRows.value.length === 0,
-)
+const importDisabled = computed(() => importableRows.value.length === 0)
 const importDisabledTip = computed(() => {
   if (!importDisabled.value) return ''
   return '所选记录中没有「已匹配」状态，无法导入系统，请先完成匹配项目'
@@ -637,53 +660,43 @@ const handleTransStatus = async () => {
   }
 }
 
-const handleImportToSystem = async () => {
-  if (!ensureSelection()) return
-  // 双保险：只有「已匹配」的记录允许导入系统
-  const importableIds = importableRows.value.map((row) => row.id)
-  if (importableIds.length === 0) {
-    ElMessage.warning('所选记录中没有「已匹配」状态，无法导入系统，请先完成匹配项目')
+const importResultVisible = ref(false)
+const importResultSummary = ref('')
+const importResultRows = ref([])
+
+const openImportResult = (res, importedCount) => {
+  const rows = buildImportResultRows(res)
+  const failedCount = rows.filter((row) => row.failed).length
+  if (rows.length === 0) {
+    ElMessage.success(res?.message || `已导入系统，共 ${importedCount} 条`)
     return
   }
+  const issueCount = failedCount || extractFailedImportDetails(res).length
+  importResultRows.value = rows
+  importResultSummary.value = issueCount
+    ? `导入完成，共 ${rows.length} 条，其中 ${issueCount} 条未成功`
+    : `导入完成，共 ${rows.length} 条`
+  importResultVisible.value = true
+}
+
+const handleImportToSystem = async () => {
+  if (importDisabled.value) return
+  if (!ensureSelection()) return
+  const importableIds = importableRows.value.map((row) => row.id)
   if (importableIds.length !== selectedRows.value.length) {
     ElMessage.warning('所选记录中存在非「已匹配」状态，已仅导入「已匹配」的记录')
   }
   loading.value = true
   try {
     const res = await PatentIncomingAPI.importProcesses({ ids: importableIds })
-    // 展示后端返回的所有 remark（成功/跳过/失败每条都有说明）
-    const allRemarks = extractAllImportRemarks(res)
-    const failedDetails = extractFailedImportDetails(res)
-
-    if (failedDetails.length > 0 && allRemarks.length > 0) {
-      ElMessage.warning({
-        message: `导入完成，共 ${allRemarks.length} 条，其中 ${failedDetails.length} 条未成功：\n${allRemarks.join('\n')}`,
-        duration: 0,
-        showClose: true,
-        customClass: 'el-message-multiline',
-      })
-    } else if (allRemarks.length > 0) {
-      ElMessage.success({
-        message: `导入完成，共 ${allRemarks.length} 条：\n${allRemarks.join('\n')}`,
-        duration: 0,
-        showClose: true,
-        customClass: 'el-message-multiline',
-      })
-    } else {
-      ElMessage.success(res?.message || `已导入系统，共 ${importableIds.length} 条`)
-    }
+    openImportResult(res, importableIds.length)
     getList()
   } catch (error) {
     console.error('导入系统失败:', error)
-    const allRemarks = extractAllImportRemarks(error?.payload ?? error?.response?.data ?? error)
-    const failedDetails = extractFailedImportDetails(error?.payload ?? error?.response?.data ?? error)
-    if (failedDetails.length > 0 || allRemarks.length > 0) {
-      ElMessage.warning({
-        message: `导入完成：\n${(allRemarks.length ? allRemarks : failedDetails).join('\n')}`,
-        duration: 0,
-        showClose: true,
-        customClass: 'el-message-multiline',
-      })
+    const payload = error?.payload ?? error?.response?.data ?? error
+    const rows = buildImportResultRows(payload)
+    if (rows.length > 0) {
+      openImportResult(payload, importableIds.length)
     } else {
       ElMessage.error(error?.message || '导入系统失败')
     }
@@ -933,5 +946,13 @@ onMounted(() => {
 :deep(.el-message-multiline) {
   white-space: pre-line;
   max-width: 60vw;
+}
+
+.original-case-code {
+  margin-top: 2px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
 }
 </style>

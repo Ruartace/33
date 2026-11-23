@@ -31,6 +31,7 @@ export const STATUS_LABEL_MAP = {
   找到唯一项目: '已匹配',
   导入成功: '已处理',
   导入失败: '导入失败',
+  无通知书规则: '无通知书规则',
   无需处理: '无需处理',
 }
 
@@ -44,6 +45,7 @@ export const STATUS_GROUP_MAP = {
   找到唯一项目: STATUS_GROUP_PENDING,
   导入成功: STATUS_GROUP_DONE,
   导入失败: STATUS_GROUP_PENDING,
+  无通知书规则: STATUS_GROUP_PENDING,
   无需处理: STATUS_GROUP_NO_PROCESS,
 }
 
@@ -70,12 +72,12 @@ const pick = (row, camel, snake) => {
 /** 取列表行 / 对象的内部状态值 */
 export const getInternalStatus = (row = {}) => pick(row, 'status', 'status') || ''
 
-/** 状态列展示文案：优先后端返回的 statusLabel */
+/** 状态列展示文案：优先后端返回的 statusLabel，不回退显示内部值 status */
 export const resolveStatusLabel = (row = {}) => {
   const label = pick(row, 'statusLabel', 'status_label')
   if (label) return label
   const internal = getInternalStatus(row)
-  return STATUS_LABEL_MAP[internal] ?? LEGACY_STATUS_LABELS[internal] ?? internal
+  return STATUS_LABEL_MAP[internal] ?? LEGACY_STATUS_LABELS[internal] ?? ''
 }
 
 /** 状态分组：优先后端返回的 statusGroup */
@@ -86,31 +88,33 @@ export const resolveStatusGroup = (row = {}) => {
   return STATUS_GROUP_MAP[internal] ?? LEGACY_STATUS_GROUPS[internal] ?? STATUS_GROUP_PENDING
 }
 
+/** 同一「未处理」分组里需要醒目色的失败类标签 */
+const FAILURE_STATUS_LABELS = new Set([
+  '导入失败',
+  '缺文件描述',
+  '内部代码不唯一',
+  '找不到项目',
+  '项目不唯一',
+  '无通知书规则',
+])
+
 /**
- * 状态标签颜色：按 statusGroup 上底色，失败类标签再用醒目色覆盖。
- * 未处理=默认、已处理=成功色、无需处理=灰色；
- * 缺文件描述 / 内部代码不唯一 / 找不到项目 / 项目不唯一 / 导入失败 = 醒目色（danger）。
- * 已匹配用警告色，突出「可以导入系统」的行。
+ * 状态标签颜色。
+ * 未处理=默认灰、已处理=绿、无需处理=灰蓝；
+ * 失败类（含无通知书规则）=红，「已匹配」=蓝。
+ * 返回空字符串表示 Element Plus 默认标签色。
  */
 export const resolveStatusTagType = (rowOrLabel) => {
   const row =
     typeof rowOrLabel === 'string' ? { statusLabel: rowOrLabel } : (rowOrLabel ?? {})
-  const label = row.statusLabel ?? ''
-  const group = row.statusGroup ?? resolveStatusGroup(row)
+  const label = resolveStatusLabel(row)
+  const group = resolveStatusGroup(row)
 
-  if (
-    label === '导入失败' ||
-    label === '缺文件描述' ||
-    label === '内部代码不唯一' ||
-    label === '找不到项目' ||
-    label === '项目不唯一'
-  ) {
-    return 'danger'
-  }
-  if (label === '已匹配') return 'warning'
+  if (FAILURE_STATUS_LABELS.has(label)) return 'danger'
+  if (label === '已匹配') return 'primary'
   if (group === STATUS_GROUP_DONE) return 'success'
   if (group === STATUS_GROUP_NO_PROCESS) return 'info'
-  return 'primary'
+  return ''
 }
 
 /** 只有「已匹配」（内部值「找到唯一项目」）允许导入系统 */
@@ -259,5 +263,69 @@ export const extractAllImportRemarks = (res) => {
   const list = Array.isArray(details) ? details : []
   return list
     .map((item) => item?.remark || item?.message || '')
+    .filter(Boolean)
+}
+
+const readDetailList = (res) => {
+  const details =
+    res?.data?.details ??
+    res?.details ??
+    res?.data?.data?.details ??
+    res?.payload?.data?.details ??
+    res?.payload?.details ??
+    []
+  return Array.isArray(details) ? details : []
+}
+
+/** 常见 remark 片段对应的人工说明。原文（含基准日期代码）仍原样保留。 */
+const hintForRemarkSegment = (segment) => {
+  if (/期限基准日期取不到\s*[:：]\s*priority_date/.test(segment)) {
+    return '该案件无优先权信息，相关期限需人工补'
+  }
+  if (/期限基准日期取不到\s*[:：]\s*application_date/.test(segment)) {
+    return '该案件无申请日，相关期限需人工补'
+  }
+  if (segment.includes('来文 PDF 地址为空') || segment.includes('来文PDF地址为空')) {
+    return '重新上传该来文后才会生成附件'
+  }
+  if (segment.includes('本次未对应到处理事项')) {
+    return '检查规则的处理事项'
+  }
+  if (segment.includes('找不到对应事项')) {
+    return '核对规则的事项名称与案件内事项'
+  }
+  if (segment === '无变更') {
+    return '可转状态后重试'
+  }
+  return ''
+}
+
+/**
+ * 导入结果弹窗行。failed=false 但带 remark 的条目同样展示。
+ * 多段用「；」拼接，基准日期代码保留在 remark 原文里。
+ */
+export const buildImportResultRows = (res) => {
+  return readDetailList(res)
+    .map((item) => {
+      const raw = String(item?.remark || item?.message || '').trim()
+      if (!raw) return null
+      const segments = raw
+        .split(/[；;\n]+/)
+        .map((part) => part.trim())
+        .filter(Boolean)
+      const hints = []
+      segments.forEach((segment) => {
+        const hint = hintForRemarkSegment(segment)
+        if (hint && !hints.includes(hint)) hints.push(hint)
+      })
+      const caseCode =
+        item?.caseCode ?? item?.case_code ?? item?.projectNumber ?? item?.project_no ?? ''
+      return {
+        caseCode: caseCode == null ? '' : String(caseCode),
+        remark: segments.join('；'),
+        hint: hints.join('；'),
+        failed: item?.failed === true,
+      }
+    })
     .filter(Boolean)
 }
