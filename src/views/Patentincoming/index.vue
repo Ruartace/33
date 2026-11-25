@@ -857,15 +857,15 @@ onMounted(() => {
 <style scoped>
 .patentincoming-wrapper {
   box-sizing: border-box;
+  min-height: 100%;
+  background: #fff;
 }
 
 /* 搜索模块样式 */
 .body-part-search {
-  padding: 16px;
+  padding: 4px 0 12px;
   background: #fff;
-  border-radius: 4px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .filter-form {
@@ -881,10 +881,10 @@ onMounted(() => {
 
 /* 内容区域样式 */
 .body-part-content {
-  padding: 16px;
+  padding: 16px 0 0;
   background: #fff;
-  border-radius: 4px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .part-table-header {
